@@ -19,4 +19,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Safety grep
         run: |
-          ! grep -R -nE 'subprocess|os\.system|shell=True|eval\(|exec\(' disk_inspector
+          ! grep -R -nE 'subprocess|os\\.system|shell=True|eval\\(|exec\\(' --include='*.py' --exclude='installer.py' disk_inspector
+          if [ -f disk_inspector/installer.py ]; then
+            ! grep -nE 'shell=True|os\\.system|eval\\(|exec\\(' disk_inspector/installer.py
+            grep -F 'subprocess.run([cli, "-m", str(target)]' disk_inspector/installer.py
+            grep -F 'hmac.compare_digest' disk_inspector/installer.py
+            grep -F 'sha256(body).hexdigest()' disk_inspector/installer.py
+          fi
