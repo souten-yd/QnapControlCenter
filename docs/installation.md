@@ -25,3 +25,7 @@ ls -l /opt/bin/python3.11 /usr/bin/python3 2>/dev/null
 ```
 
 The start script logs errors in `/var/run` (tmpfs, cleared on reboot), checks Python and package files, waits for HTTP readiness, and refuses to report success if health checks fail. Never expose port 8778 publicly; there is no authentication.
+
+
+### Fix in 0.1.3
+The QTS init script under `/etc/init.d` is **not** the application root. The service now uses `getcfg QnapControlCenter Install_Path -f /etc/config/qpkg.conf`, checks that `disk_inspector/` exists at the discovered root, and writes an actionable error to `/var/run/qnapcontrolcenter-startup.log` if not. To inspect configured path: `getcfg QnapControlCenter Install_Path -f /etc/config/qpkg.conf`.

@@ -1,6 +1,20 @@
 #!/bin/sh
 # QTS QPKG lifecycle. Persistent log stored in tmpfs, not on the HDD.
-BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# QTS copies/links the service launcher into /etc/init.d; resolve actual QPKG root.
+QPKG_NAME="QnapControlCenter"
+QPKG_CONF="/etc/config/qpkg.conf"
+resolve_base() {
+  if [ -r "$QPKG_CONF" ] && command -v getcfg >/dev/null 2>&1; then
+    BASE="$(getcfg "$QPKG_NAME" Install_Path -f "$QPKG_CONF" 2>/dev/null)"
+  fi
+  if [ -z "$BASE" ] && [ -r "$QPKG_CONF" ]; then
+    BASE="$(sed -n '/^\[QnapControlCenter\]/,/^\[/s/^[[:space:]]*Install_Path[[:space:]]*=[[:space:]]*//p' "$QPKG_CONF" | head -n 1)"
+  fi
+  BASE="${BASE%\"}"; BASE="${BASE#\"}"
+  [ -n "$BASE" ] && [ -d "$BASE/disk_inspector" ] || return 1
+}
+BASE=""
+
 PIDFILE="/var/run/qnapcontrolcenter.pid"
 LOG="/var/run/qnapcontrolcenter-startup.log"
 PORT=8778
@@ -32,6 +46,7 @@ start_service() {
     rm -f "$PIDFILE"
   fi
   detect_python || return 1
+  if ! resolve_base; then write_log "ERROR: QPKG Install_Path missing/invalid in $QPKG_CONF (value=$BASE)"; return 1; fi
   [ -f "$BASE/disk_inspector/server.py" ] || { write_log "ERROR: server.py missing under $BASE"; return 1; }
   cd "$BASE" || return 1
   write_log "Starting Python=$PYTHON base=$BASE port=$PORT"
