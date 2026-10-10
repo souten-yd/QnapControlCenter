@@ -34,6 +34,10 @@ class State:
 
 def handler_factory(state):
     class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            # HTTP polling must not generate continuous log writes.
+            pass
+
         def do_GET(self):
             if self.path in ("/", "/index.html"):
                 payload, mime = UI, "text/html; charset=utf-8"
