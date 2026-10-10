@@ -1,0 +1,2 @@
+#!/bin/sh
+# QDK package hook file: no custom install/remove hooks required.

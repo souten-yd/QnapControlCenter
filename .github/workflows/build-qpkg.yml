@@ -1,0 +1,46 @@
+name: Build QPKG candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'packaging/**'
+      - 'disk_inspector/**'
+      - '.github/workflows/build-qpkg.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QDK 2.5.3
+        run: |
+          set -eu
+          curl --fail --location --retry 3 -o /tmp/qdk.deb \
+            https://github.com/qnap-dev/QDK/releases/download/v2.5.3/qdk_2.5.3_amd64.deb
+          sudo apt-get update
+          sudo apt-get install -y /tmp/qdk.deb
+      - name: Build x86_64 QPKG
+        run: sh packaging/build.sh
+      - name: Check payload and checksums
+        run: |
+          set -eu
+          test "$(find dist -name '*.qpkg' | wc -l)" -eq 1
+          (cd dist && sha256sum *.qpkg > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qnapcontrolcenter-qpkg-candidate
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish QPKG pre-release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.0-rc1 dist/*.qpkg dist/SHA256SUMS \
+            --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.0-rc1 (unverified on QTS)' \
+            --prerelease --notes 'QTS 5.x x86_64 candidate. Installation, upgrade, and rollback have NOT been verified on a NAS. Web update discovery only; no automatic QPKG installation. Install at your own risk after backup.'

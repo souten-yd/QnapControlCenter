@@ -1,0 +1,22 @@
+name: Validate Disk Inspector
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python compilation
+        run: python -m compileall -q disk_inspector tests
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Safety grep
+        run: |
+          ! grep -R -nE 'subprocess|os\.system|shell=True|eval\(|exec\(' disk_inspector
