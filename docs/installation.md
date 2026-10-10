@@ -10,3 +10,18 @@ QDK QPKG packaging is staged; production release is blocked until the package is
 - Check uninstall/reinstall and upgrade behavior on a backed-up system. Do not publish binary release until real-device validation, checksum, provenance and rollback instructions are available.
 
 Web release checker is read-only: there is **no automatic QPKG installation** yet. An authenticated explicit update endpoint requires verified device-specific QTS installer behavior, integrity verification, and failure recovery.
+
+
+## ERR_CONNECTION_FAILED troubleshooting
+QTS App Center Open should target `http://NAS-IP:8778/` with `QPKG_WEBUI=/`, `QPKG_WEB_PORT=8778`, `QPKG_WEB_SSL_PORT=-2`.
+After installing QPKG v0.1.2 or later, check service status in App Center; SSH diagnostics:
+
+```sh
+cat /var/run/qnapcontrolcenter-startup.log
+grep -A 20 '^\[QnapControlCenter\]' /etc/config/qpkg.conf
+netstat -lnt 2>/dev/null | grep ':8778'
+curl -v --max-time 5 http://127.0.0.1:8778/api/status
+ls -l /opt/bin/python3.11 /usr/bin/python3 2>/dev/null
+```
+
+The start script logs errors in `/var/run` (tmpfs, cleared on reboot), checks Python and package files, waits for HTTP readiness, and refuses to report success if health checks fail. Never expose port 8778 publicly; there is no authentication.
