@@ -84,7 +84,12 @@ def stage_verified(tag):
         raise ValueError("Package size mismatch")
     if hashlib.sha256(body).hexdigest() != expected[0]:
         raise ValueError("SHA256 mismatch")
-    folder = tempfile.mkdtemp(prefix="qcc-update-", dir="/tmp")
+    ram_root = "/dev/shm"
+    if not os.path.ismount(ram_root):
+        raise RuntimeError("RAM staging unavailable")
+    if shutil.disk_usage(ram_root).free < len(body) + 8388608:
+        raise RuntimeError("Insufficient RAM for upgrade")
+    folder = tempfile.mkdtemp(prefix="qcc-update-", dir=ram_root)
     target = Path(folder) / "QnapControlCenter.qpkg"
     target.write_bytes(body)
     os.chmod(target, 0o600)
