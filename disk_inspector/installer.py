@@ -41,6 +41,9 @@ def _read_url(url, maximum):
         raise ValueError("Unexpected download host")
     request = Request(url, headers={"User-Agent": "QnapControlCenter-Updater", "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
+        final = urlparse(response.geturl())
+        if final.scheme != "https" or final.hostname not in ("api.github.com", "github.com", "release-assets.githubusercontent.com"):
+            raise ValueError("Untrusted redirect host")
         if int(response.headers.get("Content-Length", 0)) > maximum:
             raise ValueError("File too large")
         payload = response.read(maximum + 1)
