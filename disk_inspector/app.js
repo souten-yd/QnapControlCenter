@@ -37,6 +37,7 @@ async function checkUpdate() {
     if (!response.ok) throw Error('HTTP '+response.status);
     const result = await response.json();
     if (result.error) throw Error(result.message);
+    selectedRelease=result.tag;
     target.replaceChildren();
     const info = document.createElement('span');
     info.textContent = '最新リリース: ' + result.tag + ' · QPKG: ' +
@@ -53,3 +54,30 @@ async function checkUpdate() {
 }
 $('check-update').addEventListener('click', checkUpdate);
 checkUpdate();
+
+let selectedRelease=null;
+const originalCheckUpdate=checkUpdate;
+async function updateStatus(){
+ try{
+  const r=await fetch('/api/update-status',{cache:'no-store'});
+  if(!r.ok)return;
+  const v=await r.json();
+  $('update-progress').textContent='更新状況: '+v.state+(v.message?' — '+v.message:'');
+  $('install-update').disabled=!v.available;
+ }catch(e){$('update-progress').textContent='更新状況の取得失敗';}
+}
+$('install-update').addEventListener('click',async()=>{
+ const tag=selectedRelease;
+ if(!tag){$('update-progress').textContent='先に最新版を確認してください';return;}
+ if(!confirm(tag+' のQPKGをこのNASにインストールします。処理中は一時的に接続できなくなります。続行しますか？'))return;
+ const token=$('update-token').value;
+ if(!token){$('update-progress').textContent='管理トークンを入力してください';return;}
+ $('update-progress').textContent='更新を開始しています…';
+ try{
+  const r=await fetch('/api/install-update',{method:'POST',headers:{'Content-Type':'application/json','X-QCC-Admin-Token':token},body:JSON.stringify({tag})});
+  const v=await r.json();
+  $('update-progress').textContent=r.ok?'更新を開始しました。再起動後に再接続してください。':'更新開始エラー: '+(v.error||r.status);
+ }catch(e){$('update-progress').textContent='更新通信に失敗: '+e.message;}
+});
+setInterval(updateStatus,5000);
+updateStatus();
