@@ -42,7 +42,7 @@ async function checkUpdate() {
     const info = document.createElement('span');
     info.textContent = '最新リリース: ' + result.tag + ' · QPKG: ' +
       (result.qpkg.length ? result.qpkg.map(a => a.name).join(', ') : '未公開') +
-      ' · Webからの適用は現在無効（実機検証待ち）';
+      ' · インストール可否は下記の更新状態で確認';
     target.append(info, document.createTextNode(' '));
     if (result.release_url && result.release_url.startsWith('https://github.com/souten-yd/QnapControlCenter/releases/')) {
       const link = document.createElement('a');
@@ -64,6 +64,7 @@ async function updateStatus(){
   const v=await r.json();
   $('update-progress').textContent='更新状況: '+v.state+(v.message?' — '+v.message:'');
   $('install-update').disabled=!v.available;
+  if(!v.available){$('update-progress').textContent='Web更新は利用できません: QTSインストーラー（qpkg_cli）または更新権限を確認してください';}
  }catch(e){$('update-progress').textContent='更新状況の取得失敗';}
 }
 $('install-update').addEventListener('click',async()=>{
