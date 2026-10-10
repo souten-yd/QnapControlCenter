@@ -49,6 +49,10 @@ start_service() {
   if ! resolve_base; then write_log "ERROR: QPKG Install_Path missing/invalid in $QPKG_CONF (value=$BASE)"; return 1; fi
   [ -f "$BASE/disk_inspector/server.py" ] || { write_log "ERROR: server.py missing under $BASE"; return 1; }
   cd "$BASE" || return 1
+  if [ ! -s /var/run/qnapcontrolcenter-update-token ]; then
+    umask 077
+    "$PYTHON" -B -c 'import secrets;open("/var/run/qnapcontrolcenter-update-token","w").write(secrets.token_urlsafe(32))' || { write_log "ERROR: could not create admin update token"; return 1; }
+  fi
   write_log "Starting Python=$PYTHON base=$BASE port=$PORT"
   PYTHONPATH="$BASE" "$PYTHON" -B -m disk_inspector.server --host 0.0.0.0 --port "$PORT" >> "$LOG" 2>&1 &
   child=$!

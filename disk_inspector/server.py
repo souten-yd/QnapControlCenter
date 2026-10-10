@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .monitor import Sampler
 from .update import check_latest
+from . import installer
 
 UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
@@ -40,6 +41,10 @@ def handler_factory(state):
                 payload, mime = CSS, "text/css; charset=utf-8"
             elif self.path == "/app.js":
                 payload, mime = JS, "text/javascript; charset=utf-8"
+            elif self.path == "/api/update-status":
+                data=installer.status()
+                data["available"]=installer.ready()
+                payload,mime=json.dumps(data).encode(),"application/json"
             elif self.path == "/api/status":
                 with state.lock:
                     data = dict(latest=state.latest, history=list(state.samples)[-120:])
@@ -61,6 +66,40 @@ def handler_factory(state):
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'")
             self.end_headers()
             self.wfile.write(payload)
+        def do_POST(self):
+            if self.path != "/api/install-update":
+                self.send_error(404)
+                return
+            host = self.headers.get("Host", "")
+            origin = self.headers.get("Origin", "")
+            if not host or origin not in ("http://" + host, "https://" + host):
+                self.send_error(403)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 1024:
+                    self.send_error(413)
+                    return
+                if not installer.authenticate(self.headers.get("X-QCC-Admin-Token", "")):
+                    self.send_error(403)
+                    return
+                args = json.loads(self.rfile.read(length))
+                if not isinstance(args, dict) or set(args) != {"tag"} or not isinstance(args["tag"], str):
+                    self.send_error(400)
+                    return
+                result = installer.start(args["tag"])
+                payload = json.dumps(result).encode()
+                self.send_response(202)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(payload)
+            except (ValueError, RuntimeError, OSError) as exc:
+                payload = json.dumps({"error": str(exc)[:200]}).encode()
+                self.send_response(409)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(payload)
     return Handler
 
 def main():
