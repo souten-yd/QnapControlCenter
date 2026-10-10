@@ -102,7 +102,7 @@ def worker(tag):
         if not cli:
             raise RuntimeError("QTS qpkg_cli not available")
         write_status("installing", "Validated QPKG; requesting QTS installation")
-        # Never shell=True, never accept a path or CLI switches from a request.
+        # Fixed argument vector; no request-supplied CLI options.
         proc = subprocess.run([cli, "-m", str(target)], timeout=300, capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError("QTS installer failed (exit %s)" % proc.returncode)
