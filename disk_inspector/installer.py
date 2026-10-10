@@ -124,8 +124,15 @@ def start(tag):
                 raise RuntimeError("An update is already running")
         except ValueError:
             pass
-    import threading
-    threading.Thread(target=worker, args=(tag,), daemon=True).start()
+    # Launch independent child so QTS can stop/restart the HTTP service while installing.
+    import sys
+    import subprocess
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
+    subprocess.Popen([sys.executable, "-B", "-m", "disk_inspector.installer", "--apply", tag],
+                     env=env, cwd="/", stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True, close_fds=True)
     return {"state": "starting", "message": "Update requested"}
 
 def status():
@@ -135,3 +142,9 @@ def status():
         except (OSError, ValueError):
             pass
     return {"state": "idle", "message": "No update in progress"}
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 3 or sys.argv[1] != "--apply" or not TAG_RE.fullmatch(sys.argv[2]):
+        raise SystemExit(2)
+    worker(sys.argv[2])
