@@ -6,6 +6,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$ROOT/packaging/." "$STAGE/"
 mkdir -p "$STAGE/shared/disk_inspector" "$STAGE/x86_64"
+chmod 755 "$STAGE/shared/QnapControlCenter.sh"
 cp "$ROOT"/disk_inspector/*.py "$ROOT"/disk_inspector/*.js "$ROOT"/disk_inspector/*.html "$STAGE/shared/disk_inspector/"
 # QDK supports --build-arch x86_64 and requires package_routines.
 (cd "$STAGE" && qbuild --build-arch x86_64 --build-dir "$ROOT/dist")
