@@ -22,7 +22,10 @@ async function refresh() {
     const kb = b => ((b||0)/1024).toFixed(1);
     table('disks', (latest.disks||[]).map(d=>({...d,read_bps:mb(d.read_bps),write_bps:mb(d.write_bps)})), ['device','read_bps','write_bps','read_iops','write_iops','busy_pct']);
     table('procs', (latest.processes||[]).map(p=>({...p,read_bps:kb(p.read_bps),write_bps:kb(p.write_bps)})), ['pid','name','read_bps','write_bps']);
-    $('metrics').textContent = latest.note || '';
+    $('reads').textContent = mb((latest.disks||[]).reduce((a,d)=>a+d.read_bps,0));
+    $('writes').textContent = mb((latest.disks||[]).reduce((a,d)=>a+d.write_bps,0));
+    $('busy').textContent = Math.max(0,...(latest.disks||[]).map(d=>d.busy_pct)).toFixed(1);
+    $('count').textContent = (latest.processes||[]).length;
   } catch(e) {$('state').textContent = '監視APIに接続できません: '+e.message;}
 }
 refresh(); setInterval(refresh,5000);
@@ -48,7 +51,5 @@ async function checkUpdate() {
     }
   } catch (error) { target.textContent = '更新確認に失敗: ' + error.message; }
 }
-const checkButton = document.createElement('button');
-checkButton.textContent = '最新版を確認';
-checkButton.addEventListener('click', checkUpdate);
-$('update').after(checkButton);
+$('check-update').addEventListener('click', checkUpdate);
+checkUpdate();
