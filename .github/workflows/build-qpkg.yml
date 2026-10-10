@@ -41,10 +41,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.1-rc2 >/dev/null 2>&1; then
-            echo 'Release v0.1.1-rc2 already exists; skipping duplicate publication.'
+          if gh release view v0.1.2-rc3 >/dev/null 2>&1; then
+            echo 'Release v0.1.2-rc3 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.1-rc2 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.1-rc2 (QTS unverified)' \
+            gh release create v0.1.2-rc3 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.2-rc3 (QTS unverified)' \
               --prerelease --notes 'QTS 5.x x86_64 candidate. NAS install, update, and rollback are unverified. Web release lookup only; no automatic QPKG installation. Back up before manual testing.'
           fi
