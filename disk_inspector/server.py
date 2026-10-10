@@ -11,6 +11,7 @@ from .update import check_latest
 
 UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
+CSS = Path(__file__).with_name("style.css").read_bytes()
 
 class State:
     def __init__(self):
@@ -35,6 +36,8 @@ def handler_factory(state):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
                 payload, mime = UI, "text/html; charset=utf-8"
+            elif self.path == "/style.css":
+                payload, mime = CSS, "text/css; charset=utf-8"
             elif self.path == "/app.js":
                 payload, mime = JS, "text/javascript; charset=utf-8"
             elif self.path == "/api/status":
