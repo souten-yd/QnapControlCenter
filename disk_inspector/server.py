@@ -7,8 +7,10 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .monitor import Sampler
+from .update import check_latest
 
 UI = Path(__file__).with_name("index.html").read_bytes()
+JS = Path(__file__).with_name("app.js").read_bytes()
 
 class State:
     def __init__(self):
@@ -33,13 +35,19 @@ def handler_factory(state):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
                 payload, mime = UI, "text/html; charset=utf-8"
+            elif self.path == "/app.js":
+                payload, mime = JS, "text/javascript; charset=utf-8"
             elif self.path == "/api/status":
                 with state.lock:
                     data = dict(latest=state.latest, history=list(state.samples)[-120:])
                 payload, mime = json.dumps(data).encode(), "application/json"
             elif self.path == "/api/update":
-                payload, mime = json.dumps(dict(supported=False,
-                  message="Manual QPKG update required until signed release validation and QTS installer integration are verified.")).encode(), "application/json"
+                try:
+                    update = check_latest()
+                except (OSError, ValueError, KeyError) as exc:
+                    update = dict(error=type(exc).__name__, install_supported=False,
+                                  message="GitHub Releases could not be checked.")
+                payload, mime = json.dumps(update).encode(), "application/json"
             else:
                 self.send_error(404)
                 return
