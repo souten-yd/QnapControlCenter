@@ -78,7 +78,8 @@ class RuntimeIdentityTests(unittest.TestCase):
         self.assertIn('running.get("pid")', launcher)
         self.assertIn("port_available", launcher)
         self.assertIn("QCC_EXPECTED_INFO", launcher)
-        self.assertIn('owned_pid "$old"', launcher)
+        self.assertIn('owned_pid "$recorded"', launcher)
+        self.assertIn('owned_pid "$target"', launcher)
 
 
 if __name__ == "__main__":
