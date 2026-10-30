@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Server disks and activity waveform">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#178ee6"/><stop offset=".25" stop-color="#08499a"/><stop offset="1" stop-color="#010b26"/></linearGradient>
+<linearGradient id="frame" x1="0" y1="0" x2=".65" y2="1"><stop stop-color="#68d5ff"/><stop offset=".12" stop-color="#2e83c8"/><stop offset=".65" stop-color="#0a295d"/><stop offset="1" stop-color="#000b29"/></linearGradient>
+<linearGradient id="bay" x1="0" y1="0" x2=".5" y2="1"><stop stop-color="#c4eaff"/><stop offset=".16" stop-color="#5790ca"/><stop offset=".65" stop-color="#25568c"/><stop offset="1" stop-color="#142e55"/></linearGradient>
+<linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#039dff"/><stop offset=".5" stop-color="#48eeff"/><stop offset="1" stop-color="#13f9c2"/></linearGradient>
+<radialGradient id="light"><stop stop-color="#8afff0"/><stop offset=".4" stop-color="#2ef1d1"/><stop offset=".78" stop-color="#009c96"/><stop offset="1" stop-color="#005d70"/></radialGradient>
+</defs>
+<rect width="512" height="512" rx="110" fill="url(#bg)"/>
+<rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#2189f6" stroke-width="6"/>
+<rect x="65" y="72" width="382" height="349" rx="57" fill="url(#frame)" stroke="#2076c4" stroke-width="5"/>
+<rect x="84" y="102" width="345" height="289" rx="33" fill="#051833" stroke="#2765af" stroke-width="4"/>
+<g stroke="#7cbcf1" stroke-width="2" fill="url(#bay)">
+<rect x="100" y="133" width="312" height="72" rx="17"/><rect x="100" y="216" width="312" height="72" rx="17"/><rect x="100" y="299" width="312" height="72" rx="17"/>
+</g>
+<g fill="#061831" stroke="#5fabe6" stroke-width="2">
+<rect x="130" y="157" width="183" height="23" rx="11"/><rect x="130" y="240" width="183" height="23" rx="11"/><rect x="130" y="323" width="183" height="23" rx="11"/>
+</g>
+<g fill="url(#light)" stroke="#65ffee" stroke-width="3">
+<circle cx="372" cy="168" r="18"/><circle cx="372" cy="251" r="18"/><circle cx="372" cy="334" r="18"/>
+</g>
+<path d="M37 411 H160 Q174 411 186 393 L197 375 Q206 359 217 390 L232 433 Q240 453 251 424 L274 341 Q281 318 292 356 L310 422 Q316 443 329 420 L345 397 Q353 385 365 400 L380 411 H475" fill="none" stroke="#0072df" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>
+<path d="M37 411 H160 Q174 411 186 393 L197 375 Q206 359 217 390 L232 433 Q240 453 251 424 L274 341 Q281 318 292 356 L310 422 Q316 443 329 420 L345 397 Q353 385 365 400 L380 411 H475" fill="none" stroke="url(#pulse)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

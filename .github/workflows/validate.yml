@@ -13,8 +13,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install icon build requirements
+        run: python -m pip install --disable-pip-version-check 'cairosvg==2.8.2' 'Pillow==11.3.0'
+      - name: Verify icon sizes
+        run: |
+          python scripts/render_icons.py --output /tmp/qcc-icons
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          p=Path('/tmp/qcc-icons')
+          for name,size in [('apple-touch-icon.png',180),('QnapControlCenter.png',64),('QnapControlCenter_80.png',80),('QnapControlCenter_gray.png',64)]:
+              with Image.open(p/name) as im:
+                  assert im.size == (size,size) and im.format == 'PNG'
+          PY
       - name: Python compilation
-        run: python -m compileall -q disk_inspector tests
+        run: python -m compileall -q disk_inspector tests scripts
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Safety grep

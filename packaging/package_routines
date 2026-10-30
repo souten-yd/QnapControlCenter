@@ -1,2 +1,14 @@
 #!/bin/sh
-# QDK package hook file: no custom install/remove hooks required.
+# QDK calls pkg_init before installation and pkg_post_install before service restoration.
+# Only new installs opt in to auto-start; upgrades preserve the owner's enabled state.
+pkg_init() {
+  QCC_FRESH_INSTALL=FALSE
+  existing="$("$CMD_GETCFG" "$QPKG_NAME" Install_Path -d "" -f "$SYS_QPKG_CONFIG_FILE" 2>/dev/null || :)"
+  if [ -z "$existing" ]; then QCC_FRESH_INSTALL=TRUE; fi
+}
+pkg_post_install() {
+  if [ "${QCC_FRESH_INSTALL:-FALSE}" = TRUE ]; then
+    SYS_QPKG_SERVICE_ENABLED=TRUE
+    log "New QnapControlCenter installation: QTS-managed auto-start enabled"
+  fi
+}
