@@ -13,7 +13,7 @@ Open http://127.0.0.1:8778. The QPKG service is configured for trusted LAN/Tails
 
 See `docs/disk-inspector-design.md`, `docs/installation.md`, and `docs/development-release-process.md`.
 
-**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.9-rc11 is a CI-built candidate only; no device-tested production QPKG.
+**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.10-rc12 is a CI-built candidate only; no device-tested production QPKG.
 
 New installs request QTS-managed auto-start; upgrades preserve QTS's existing enabled/disabled state. Startup has a bounded wait for late-mounted storage/Python. See [reboot checks](docs/installation.md#nas-reboot-auto-start-check).
 
@@ -24,3 +24,9 @@ The iPhone Home Screen and QTS App Center icons are generated from `assets/qcc-i
 The dashboard can update QnapControlCenter **without typing a management token** from an explicitly allowlisted LAN client. For safety, LAN updates are disabled by default, and are not enabled simply because the IP is private. Admin-approved setup is one-time via the NAS's QTS configuration; see [LAN update configuration](docs/lan-update.md). When active, the token field disappears on the authorized client's dashboard and an explicit confirmation is still required.
 
 Existing token-based Web updates are preserved for non-allowlisted clients. LAN updates require a numeric NAS LAN address and same-origin requests. They do not authenticate individual QTS users, so only allow devices you fully trust. No Internet/guest-Wi-Fi access; no automatic installation. Real-device QTS upgrade and rollback remain unverified.
+
+## Rolling 5-minute disk write diagnostics
+
+The **書込診断** tab continuously samples existing disk/procfs counters every 5 seconds and holds only the latest **300 seconds in RAM**. The same existing /proc/PID/io scan feeds process totals, without a duplicate process-wide scan. Every 30 seconds the collector examines write-capable /proc/PID/fdinfo descriptors for at most the top 6 writing processes, checking no more than 48 descriptors per process. This adds no normal filesystem content reads or log writes.
+
+The UI reports disk counters, process counters, approximate QPKG owner hints, executable/current directory, write-capable *open-file candidates*, and its own process physical write_bytes delta. Paths are **not confirmed per-file write events** and cannot support exact per-file byte counts without more invasive tracing. RAID, snapshots, journal, permission restrictions and short-lived descriptors can create unattributed writes. See [RAM write diagnostics](docs/ram-write-diagnostics.md) for limitations, memory bounds and security.
