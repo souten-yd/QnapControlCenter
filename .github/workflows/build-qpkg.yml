@@ -7,6 +7,8 @@ on:
     paths:
       - 'packaging/**'
       - 'disk_inspector/**'
+      - 'assets/**'
+      - 'scripts/render_icons.py'
       - '.github/workflows/build-qpkg.yml'
 jobs:
   build:
@@ -22,6 +24,11 @@ jobs:
             https://github.com/qnap-dev/QDK/releases/download/v2.5.3/qdk_2.5.3_amd64.deb
           sudo apt-get update
           sudo apt-get install -y /tmp/qdk.deb
+      - name: Set up icon renderer
+        run: |
+          python3 -m venv /tmp/qcc-icon-venv
+          /tmp/qcc-icon-venv/bin/python -m pip install --disable-pip-version-check 'cairosvg==2.8.2' 'Pillow==11.3.0'
+          echo "/tmp/qcc-icon-venv/bin" >> "$GITHUB_PATH"
       - name: Build x86_64 QPKG
         run: sh packaging/build.sh
       - name: Check payload and checksums
@@ -41,10 +48,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.7-rc9 >/dev/null 2>&1; then
-            echo 'Release v0.1.7-rc9 already exists; skipping duplicate publication.'
+          if gh release view v0.1.8-rc10 >/dev/null 2>&1; then
+            echo 'Release v0.1.8-rc10 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.7-rc9 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.7-rc9 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. NAS install, update, and rollback are unverified. Web release lookup only; no automatic QPKG installation. Back up before manual testing.'
+            gh release create v0.1.8-rc10 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.8-rc10 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. Reboot readiness and iOS/QTS icons added; NAS boot, upgrade and rollback remain unverified. Back up before manual testing.'
           fi

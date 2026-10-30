@@ -1,31 +1,42 @@
 #!/bin/sh
-# QTS QPKG lifecycle. Persistent log stored in tmpfs, not on the HDD.
-# QTS copies/links the service launcher into /etc/init.d; resolve actual QPKG root.
-QPKG_NAME="QnapControlCenter"
-QPKG_CONF="/etc/config/qpkg.conf"
-resolve_base() {
-  if [ -r "$QPKG_CONF" ] && command -v getcfg >/dev/null 2>&1; then
-    BASE="$(getcfg "$QPKG_NAME" Install_Path -f "$QPKG_CONF" 2>/dev/null)"
-  fi
-  if [ -z "$BASE" ] && [ -r "$QPKG_CONF" ]; then
-    BASE="$(sed -n '/^\[QnapControlCenter\]/,/^\[/s/^[[:space:]]*Install_Path[[:space:]]*=[[:space:]]*//p' "$QPKG_CONF" | head -n 1)"
-  fi
-  BASE="${BASE%\"}"; BASE="${BASE#\"}"
-  [ -n "$BASE" ] && [ -d "$BASE/disk_inspector" ] || return 1
-}
+# QTS QPKG service: bounded dependency readiness at boot; no HDD logging.
+QPKG_NAME=QnapControlCenter
+QPKG_CONF="${QCC_QPKG_CONF:-/etc/config/qpkg.conf}"
+PIDFILE="${QCC_PIDFILE:-/var/run/qnapcontrolcenter.pid}"
+LOG="${QCC_LOG:-/var/run/qnapcontrolcenter-startup.log}"
 BASE=""
-
-PIDFILE="/var/run/qnapcontrolcenter.pid"
-LOG="/var/run/qnapcontrolcenter-startup.log"
-PORT=8778
+PYTHON=""
 write_log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
+config_value() {
+  key="$1"
+  if [ "$QPKG_CONF" = /etc/config/qpkg.conf ] && [ -x /sbin/getcfg ]; then
+    /sbin/getcfg "$QPKG_NAME" "$key" -d "" -f "$QPKG_CONF" 2>/dev/null
+    return
+  fi
+  [ -r "$QPKG_CONF" ] || return 1
+  awk -v wanted="$key" '
+    /^\[QnapControlCenter\][[:space:]]*$/ { active=1; next }
+    /^\[/ { active=0 }
+    active && index($0,"=") {
+      k=substr($0,1,index($0,"=")-1); gsub(/^[[:space:]]+|[[:space:]]+$/,"",k)
+      if (k==wanted) {
+        v=substr($0,index($0,"=")+1); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v)
+        gsub(/^"|"$/,"",v); print v; exit
+      }
+    }
+  ' "$QPKG_CONF"
+}
+enabled() { [ "$(config_value Enable)" = TRUE ]; }
+resolve_base() {
+  BASE="$(config_value Install_Path)"
+  [ -n "$BASE" ] && [ -d "$BASE/disk_inspector" ] && [ -r "$BASE/disk_inspector/server.py" ]
+}
 detect_python() {
-  for candidate in /opt/bin/python3.11 /opt/bin/python3.12 /usr/local/bin/python3 /usr/bin/python3; do
+  for candidate in /opt/bin/python3.11 /opt/bin/python3.12 /opt/bin/python3 /usr/local/bin/python3 /usr/bin/python3 /usr/bin/python3.11; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import sys; assert sys.version_info >= (3, 9)' >/dev/null 2>&1 || continue
+    "$candidate" -B -c 'import sys; assert sys.version_info >= (3, 9)' >/dev/null 2>&1 || continue
     PYTHON="$candidate"; return 0
   done
-  write_log "ERROR: no usable Python >=3.9 found"
   return 1
 }
 owned_pid() {
@@ -38,6 +49,10 @@ owned_pid() {
   esac
 }
 start_service() {
+  if ! enabled; then
+    write_log "INFO: QPKG Enable is not TRUE; refusing auto-start"
+    return 1
+  fi
   if [ -f "$PIDFILE" ]; then
     old="$(cat "$PIDFILE" 2>/dev/null)"
     if owned_pid "$old" && kill -0 "$old" 2>/dev/null; then
@@ -45,35 +60,44 @@ start_service() {
     fi
     rm -f "$PIDFILE"
   fi
-  detect_python || return 1
-  if ! resolve_base; then write_log "ERROR: QPKG Install_Path missing/invalid in $QPKG_CONF (value=$BASE)"; return 1; fi
-  [ -f "$BASE/disk_inspector/server.py" ] || { write_log "ERROR: server.py missing under $BASE"; return 1; }
-  cd "$BASE" || return 1
+  attempt=0
+  until resolve_base && detect_python; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 60 ]; then
+      write_log "ERROR: dependency timeout (60s): Install_Path=$BASE Python=$PYTHON; check mounted QPKG volume and Python >=3.9"
+      return 1
+    fi
+    if [ "$attempt" -eq 1 ] || [ $((attempt % 15)) -eq 0 ]; then
+      write_log "INFO: waiting for QPKG volume / Python (attempt=$attempt)"
+    fi
+    sleep 1
+  done
+  cd "$BASE" || { write_log "ERROR: cannot cd to $BASE"; return 1; }
   if [ ! -s /var/run/qnapcontrolcenter-update-token ]; then
     umask 077
-    "$PYTHON" -B -c 'import secrets;open("/var/run/qnapcontrolcenter-update-token","w").write(secrets.token_urlsafe(32))' || { write_log "ERROR: could not create admin update token"; return 1; }
+    "$PYTHON" -B -c 'import secrets;open("/var/run/qnapcontrolcenter-update-token","w").write(secrets.token_urlsafe(32))' ||
+      { write_log "ERROR: could not create admin update token"; return 1; }
   fi
-  write_log "Starting Python=$PYTHON base=$BASE port=$PORT"
-  PYTHONPATH="$BASE" "$PYTHON" -B -m disk_inspector.server --host 0.0.0.0 --port "$PORT" >> "$LOG" 2>&1 &
+  write_log "Starting Python=$PYTHON base=$BASE port=8778"
+  PYTHONPATH="$BASE" "$PYTHON" -B -m disk_inspector.server --host 0.0.0.0 --port 8778 >> "$LOG" 2>&1 &
   child=$!
   echo "$child" > "$PIDFILE"
-  attempts=0
-  while [ "$attempts" -lt 12 ]; do
+  attempt=0
+  while [ "$attempt" -lt 20 ]; do
     if ! owned_pid "$child" || ! kill -0 "$child" 2>/dev/null; then
       write_log "ERROR: process terminated before HTTP ready"
       rm -f "$PIDFILE"; return 1
     fi
     if "$PYTHON" -B -c 'from urllib.request import urlopen; import sys; r=urlopen("http://127.0.0.1:8778/api/status",timeout=1); sys.exit(0 if r.status == 200 else 1)' >/dev/null 2>&1; then
-      write_log "Web UI ready at http://NAS-IP:$PORT/"
+      write_log "Web UI ready at http://NAS-IP:8778/"
       return 0
     fi
-    attempts=$((attempts + 1))
+    attempt=$((attempt + 1))
     sleep 1
   done
-  write_log "ERROR: HTTP health check failed"
+  write_log "ERROR: HTTP health check timeout (20s)"
   if owned_pid "$child"; then kill "$child" 2>/dev/null || :; fi
-  rm -f "$PIDFILE"
-  return 1
+  rm -f "$PIDFILE"; return 1
 }
 stop_service() {
   [ -f "$PIDFILE" ] || return 0
@@ -87,9 +111,16 @@ stop_service() {
   rm -f "$PIDFILE"
 }
 case "$1" in
-  start) start_service;;
-  stop) stop_service;;
-  restart) stop_service && start_service;;
-  status) if [ -f "$PIDFILE" ] && owned_pid "$(cat "$PIDFILE" 2>/dev/null)"; then echo running; else echo stopped; exit 1; fi ;;
-  *) echo "Usage: $0 {start|stop|restart|status}"; exit 2;;
+  start) start_service ;;
+  stop) stop_service ;;
+  restart) stop_service && start_service ;;
+  status)
+    if [ -f "$PIDFILE" ] && owned_pid "$(cat "$PIDFILE" 2>/dev/null)"; then
+      echo running
+    elif ! enabled; then
+      echo disabled; exit 1
+    else
+      echo stopped; exit 1
+    fi ;;
+  *) echo "Usage: $0 {start|stop|restart|status}"; exit 2 ;;
 esac
