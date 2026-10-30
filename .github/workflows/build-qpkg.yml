@@ -54,10 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.11-rc13 >/dev/null 2>&1; then
-            echo 'Release v0.1.11-rc13 already exists; skipping duplicate publication.'
+          if gh release view v0.1.12-rc14 >/dev/null 2>&1; then
+            echo 'Release v0.1.12-rc14 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.11-rc13 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.11-rc13 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. Runtime version and write-diagnostics visibility, QPKG payload verification and stale-process restart guards added. QTS NAS restart remains device-unverified. Back up before manual testing.'
+            gh release create v0.1.12-rc14 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.12-rc14 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. QTS service orphan/PID-file recovery with strict command + install-root verification; health requires exact new process PID and build ID. Device validation remains pending. Back up before manual testing.'
           fi

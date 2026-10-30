@@ -20,8 +20,8 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_version_matches_manifest(self):
         info = build_info(ROOT / "packaging/qpkg.cfg",
                           "a" * 40)
-        self.assertEqual(info["version"], "0.1.11")
-        self.assertEqual(info["build_id"], "0.1.11+aaaaaaaaaaaa")
+        self.assertEqual(info["version"], "0.1.12")
+        self.assertEqual(info["build_id"], "0.1.12+aaaaaaaaaaaa")
         self.assertIn("write_diagnostics", info["features"])
         self.assertEqual(build_info(ROOT / "packaging/qpkg.cfg")["commit"], "local")
 
@@ -73,9 +73,13 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_service_stale_version_guard_present(self):
         launcher = (ROOT / "packaging/shared/QnapControlCenter.sh").read_text()
         self.assertIn("/api/runtime", launcher)
-        self.assertIn("Installed build differs", launcher)
+        self.assertIn("Stale PID file", launcher)
+        self.assertIn("reconcile_owned", launcher)
+        self.assertIn('running.get("pid")', launcher)
+        self.assertIn("port_available", launcher)
         self.assertIn("QCC_EXPECTED_INFO", launcher)
-        self.assertIn('owned_pid "$old"', launcher)
+        self.assertIn('owned_pid "$recorded"', launcher)
+        self.assertIn('owned_pid "$target"', launcher)
 
 
 if __name__ == "__main__":
