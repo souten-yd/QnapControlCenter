@@ -98,3 +98,89 @@ $('install-update').addEventListener('click',async()=>{
 });
 setInterval(updateStatus,5000);
 updateStatus();
+
+const bytesLabel = bytes => {
+  const n = Number(bytes) || 0;
+  if (n >= 1048576) return (n/1048576).toFixed(2) + ' MiB';
+  if (n >= 1024) return (n/1024).toFixed(1) + ' KiB';
+  return Math.round(n) + ' B';
+};
+const shortTime = value => value ? new Date(value * 1000).toLocaleTimeString('ja-JP') : '—';
+async function refreshWriteLog() {
+  try {
+    const response = await fetch('/api/write-log', {cache:'no-store'});
+    if (!response.ok) throw Error('HTTP ' + response.status);
+    const data = await response.json();
+    $('log-disk').textContent = bytesLabel(data.disk_write_bytes);
+    $('log-process').textContent = bytesLabel(data.process_write_bytes);
+    $('log-self').textContent = bytesLabel(data.monitor_write_bytes);
+    $('log-cost').textContent = Number(data.collector_wall_ms || 0).toFixed(0) + ' ms';
+    $('log-meta').textContent = 'RAMに保持: ' + data.sample_count + '回 / 直近' +
+      data.window_seconds + '秒 · ' + shortTime(data.window_start) + ' ～ ' +
+      shortTime(data.window_end) + ' · ディスク記録なし';
+    const body = $('write-procs');
+    body.replaceChildren();
+    for (const p of data.top_processes || []) {
+      const tr = document.createElement('tr');
+      const pname = document.createElement('td');
+      pname.textContent = p.name + ' (PID ' + p.pid + ')';
+      const pkg = document.createElement('td');
+      pkg.textContent = p.package_hint || '未特定';
+      const count = document.createElement('td');
+      count.textContent = bytesLabel(p.write_bytes);
+      const detail = document.createElement('td');
+      const disclosure = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = (p.file_candidates || []).length +
+        '件の書込可能FD候補を表示';
+      disclosure.append(summary);
+      const lines = [];
+      if (p.executable) lines.push('実行ファイル: ' + p.executable);
+      if (p.cwd) lines.push('作業ディレクトリ: ' + p.cwd);
+      if (p.candidate_observed_at)
+        lines.push('候補確認時刻: ' + shortTime(p.candidate_observed_at));
+      for (const path of p.file_candidates || [])
+        lines.push('開かれたファイル候補: ' + path);
+      const pre = document.createElement('pre');
+      pre.textContent = lines.length ? lines.join('\n') : '確認できた候補なし（権限・短時間アクセス・FD調査上限）';
+      disclosure.append(pre);
+      detail.append(disclosure);
+      tr.append(pname, pkg, count, detail);
+      body.append(tr);
+    }
+    if (!body.childNodes.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = '書き込みプロセスの検出待ち、または取得権限不足';
+      tr.append(td); body.append(tr);
+    }
+    const timeline = $('write-timeline');
+    timeline.replaceChildren();
+    const series = data.timeline || [];
+    const max = Math.max(1, ...series.map(row => row.disk_write_bytes));
+    for (const point of series) {
+      const item = document.createElement('div');
+      item.className = 'write-interval';
+      const name = document.createElement('span');
+      name.textContent = shortTime(point.timestamp);
+      const track = document.createElement('div');
+      track.className = 'write-track';
+      const bar = document.createElement('div');
+      bar.className = 'write-bar';
+      bar.style.width = (100 * point.disk_write_bytes / max).toFixed(1) + '%';
+      track.append(bar);
+      const number = document.createElement('span');
+      number.textContent = bytesLabel(point.disk_write_bytes);
+      item.append(name, track, number);
+      timeline.append(item);
+    }
+    $('log-note').textContent = data.limitations + ' · ' +
+      '複数の物理ディスクを合算するとRAIDで二重計上される可能性があります。' +
+      ' プロセス計測の上位記録外: ' + bytesLabel(data.other_process_bytes);
+  } catch(error) {
+    $('log-meta').textContent = '書き込み診断に接続できません: ' + error.message;
+  }
+}
+refreshWriteLog();
+setInterval(refreshWriteLog, 15000);

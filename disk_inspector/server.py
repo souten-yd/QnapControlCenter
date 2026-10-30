@@ -7,6 +7,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .monitor import Sampler
+from .write_log import RollingWriteLog
 from .update import check_latest
 from . import installer, lan_update
 
@@ -18,7 +19,8 @@ ICON = Path(__file__).with_name("apple-touch-icon.png").read_bytes()
 class State:
     def __init__(self):
         self.lock = threading.Lock()
-        self.samples = deque(maxlen=720)
+        self.samples = deque(maxlen=60)
+        self.write_log = RollingWriteLog()
         self.latest = dict(status="warming_up", disks=[], processes=[])
         self.confirmations = lan_update.OneUseConfirmations()
 
@@ -29,9 +31,13 @@ class State:
                 sample = sampler.sample()
             except (OSError, ValueError) as exc:
                 sample = dict(status="error", error=type(exc).__name__, disks=[], processes=[])
+            # Write events are transient and never stored in the regular status ring.
             with self.lock:
-                self.latest = sample
-                self.samples.append(sample)
+                self.write_log.record(sample)
+                public_sample = dict(sample)
+                public_sample.pop("write_events", None)
+                self.latest = public_sample
+                self.samples.append(public_sample)
             time.sleep(interval)
 
 def handler_factory(state):
@@ -60,6 +66,10 @@ def handler_factory(state):
             elif self.path == "/api/status":
                 with state.lock:
                     data = dict(latest=state.latest, history=list(state.samples)[-120:])
+                payload, mime = json.dumps(data).encode(), "application/json"
+            elif self.path == "/api/write-log":
+                with state.lock:
+                    data = state.write_log.snapshot()
                 payload, mime = json.dumps(data).encode(), "application/json"
             elif self.path == "/api/update":
                 try:
