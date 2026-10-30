@@ -38,6 +38,8 @@ def verify_qpkg(path):
         js = load("disk_inspector/app.js").decode("utf-8")
         server = load("disk_inspector/server.py").decode("utf-8")
         info = json.loads(load("disk_inspector/build_info.json"))
+        if ('update-token' in html or 'manual-token' in html):
+            raise ValueError("QPKG must not ask LAN users for an admin token")
         if ('href="#write-log"' not in html or 'id="write-log"' not in html or
                 'id="open-write-log"' not in html or
                 "/api/write-log" not in js or "scrollIntoView(" not in js or

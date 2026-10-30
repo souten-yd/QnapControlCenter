@@ -1,18 +1,18 @@
-"""Explicitly opted-in, source-IP allowlisted LAN update authorization.
+"""Zero-setup LAN access for installing *official verified* QnapControlCenter QPKGs.
 
-This is an administrator-controlled trusted-network exception, not QTS user
-authentication. It must never be enabled by default or infer trust from RFC1918
-addresses alone. The QTS configuration is checked on each update request.
+This is intentionally network trust rather than QTS user authentication.
+Only socket source and destination addresses count; X-Forwarded-* is ignored.
+The two-step one-use nonce is automatic in the browser, not a user token.
 """
 import ipaddress
-from pathlib import Path
 import secrets
 import threading
 import time
 from urllib.parse import urlsplit
 
-CONFIG = Path("/etc/config/qpkg.conf")
-TRUSTED = tuple(ipaddress.ip_network(s) for s in (
+# RFC1918 plus Tailscale/CGNAT and IPv6 ULA for private networks.
+# Loopback is handled separately for NAS-local administration.
+LAN_NETS = tuple(ipaddress.ip_network(c) for c in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
     "100.64.0.0/10", "fc00::/7",
 ))
@@ -20,64 +20,40 @@ TRUSTED = tuple(ipaddress.ip_network(s) for s in (
 
 def _ip(value):
     try:
-        addr = ipaddress.ip_address(value)
-        return addr.ipv4_mapped or addr if isinstance(addr, ipaddress.IPv6Address) else addr
+        address = ipaddress.ip_address(value)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            return address.ipv4_mapped
+        return address
     except (ValueError, TypeError):
         return None
 
 
-def _settings(path=CONFIG):
-    """Parse only QnapControlCenter's QTS INI section; malformed means disabled."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return []
-    active = False
-    values = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("[") and line.endswith("]"):
-            active = line == "[QnapControlCenter]"
-        elif active and "=" in line:
-            k, v = line.split("=", 1)
-            values[k.strip()] = v.strip().strip('"')
-    if values.get("LAN_Update_Enabled") != "TRUE":
-        return []
-    raw = values.get("LAN_Update_Clients", "")
-    items = [x.strip() for x in raw.split(",") if x.strip()]
-    if not items or len(items) > 16:
-        return []
-    nets = []
-    try:
-        for item in items:
-            network = ipaddress.ip_network(item, strict=False)
-            # No blanket RFC1918 /8 grants; IPv4 /24 or narrower, IPv6 /64+.
-            if network.prefixlen < (24 if network.version == 4 else 64):
-                return []
-            if not any(network.subnet_of(parent) for parent in TRUSTED if parent.version == network.version):
-                return []
-            nets.append(network)
-    except ValueError:
-        return []
-    return nets
+def _lan_ip(value):
+    addr = _ip(value)
+    return bool(addr and any(addr in net for net in LAN_NETS
+                             if net.version == addr.version))
 
 
-def allowed_peer(peer, local, host, *, config_path=CONFIG, expected_port=8778):
-    """Require a real LAN peer and a numeric same-socket Host (no proxy trust)."""
+def allowed_peer(peer, local, host, *, expected_port=8778):
+    """No allowlist configuration required: private source and destination.
+
+    Host must exactly identify the actual listening socket address and port.
+    This deliberately refuses proxy aliases, public peers and host spoofing.
+    """
     peer_ip, local_ip = _ip(peer), _ip(local)
     if not peer_ip or not local_ip:
         return False
-    if peer_ip.is_loopback or local_ip.is_loopback:
+    if not ((peer_ip.is_loopback and local_ip.is_loopback) or
+            (_lan_ip(peer) and _lan_ip(local))):
         return False
-    if not any(peer_ip in net for net in _settings(config_path)):
-        return False
-    if not isinstance(host, str) or len(host) > 128:
+    if not isinstance(host, str) or not host or len(host) > 128:
         return False
     try:
-        host_url = urlsplit("http://" + host)
-        host_ip = _ip(host_url.hostname)
-        if (host_url.username or host_url.password or host_url.path or
-                host_url.query or host_url.fragment or host_url.port != expected_port):
+        parsed = urlsplit("http://" + host)
+        host_ip = _ip(parsed.hostname)
+        if (parsed.username is not None or parsed.password is not None
+                or parsed.path or parsed.query or parsed.fragment
+                or parsed.port != expected_port):
             return False
         return bool(host_ip and host_ip == local_ip)
     except ValueError:
@@ -85,12 +61,12 @@ def allowed_peer(peer, local, host, *, config_path=CONFIG, expected_port=8778):
 
 
 def authorized_post(peer, local, host, origin, fetch_site, intent, mime,
-                    *, config_path=CONFIG, expected_port=8778):
+                    *, expected_port=8778):
     return (
-        allowed_peer(peer, local, host, config_path=config_path, expected_port=expected_port) and
-        origin == "http://" + host and
-        fetch_site in ("", "same-origin") and
-        intent == "1" and mime == "application/json"
+        allowed_peer(peer, local, host, expected_port=expected_port)
+        and origin == "http://" + host
+        and fetch_site in ("", "same-origin")
+        and intent == "1" and mime == "application/json"
     )
 
 

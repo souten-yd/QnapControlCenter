@@ -1,36 +1,28 @@
-# Allowlisted LAN Web updating
+# LAN Web updates — no setup or admin token (v0.1.14-rc16)
 
-QnapControlCenter v0.1.9-rc11 has a **disabled-by-default** LAN convenience mode. It removes the need to type the per-install admin token for explicitly approved devices. This does **not** verify QTS administrator identity. Every person or process on an approved source device can potentially request a package upgrade.
+From this version, open **http://NAS-LAN-IP:8778/** on a trusted private network and use **最新版を確認 → 更新をインストール → 確認**. No `LAN_Update_Enabled`, `LAN_Update_Clients`, SSH token reading, token entry, subnet allowlist or QTS login is required. The former allowlist keys are ignored, not silently enforced.
 
-## One-time administrator setup
+The Web UI automatically executes a two-step, short-lived confirmation in the background. This is **not** a token the user must type or configure; it prevents cross-site requests and double submission. The user sees only the confirmation dialog.
 
-After upgrading the QPKG, connect to the NAS via SSH as an administrator. Find the private IP of the device that you want to authorize (for an iPhone: Settings → Wi-Fi → network information → IP address). Examples below use the client **192.168.68.20** and NAS **192.168.68.57**; replace with actual values.
+## Allowed connections
 
-```sh
-/sbin/setcfg QnapControlCenter LAN_Update_Clients '192.168.68.20/32' -f /etc/config/qpkg.conf
-/sbin/setcfg QnapControlCenter LAN_Update_Enabled TRUE -f /etc/config/qpkg.conf
-/sbin/getcfg QnapControlCenter LAN_Update_Clients -f /etc/config/qpkg.conf
-/sbin/getcfg QnapControlCenter LAN_Update_Enabled -f /etc/config/qpkg.conf
-```
+- Actual TCP socket peer and destination must be local/private. RFC1918 addresses (10/8, 172.16/12, 192.168/16), Tailscale/CGNAT 100.64/10, IPv6 unique-local fc00::/7, and NAS loopback pairs are recognized. A public or unrelated remote peer is refused.
+- Access the NAS via its **numeric IP:8778**, not an arbitrary hostname or public proxy. Host must equal the actual destination address and port.
+- Update POSTs require the same page's Origin, browser same-origin Fetch Metadata (if present), an explicit JSON request, and the app's custom intent header. Forwarded-IP headers are never trusted.
+- One-use, 60-second in-memory confirmation is bound to the source address and exact release. Five preparation attempts per client per 10 minutes, 20 total. No arbitrary POST command/path/URL.
+- Only the official **souten-yd/QnapControlCenter** GitHub release selected by the server can be installed. Size, filename, release and SHA-256 checks still run. The fixed `qpkg_cli -m <verified-package>` is the only install action. The package is staged in /dev/shm.
 
-Open `http://192.168.68.57:8778/` from that approved client and refresh. The token input is hidden when that client is authorized. Choose **最新版を確認**, then **更新をインストール** and approve the confirmation. The server rechecks the QTS config on every update action, so a service restart is not needed for setting changes.
+## Security and device limitations
 
-For multiple trusted devices, use a comma-separated list such as `192.168.68.20/32,192.168.68.21/32`; up to 16 entries. As a convenience, `192.168.68.0/24` permits the entire trusted subnet. Only explicit ranges within RFC1918, CGNAT and unique-local IPv6 addressing are accepted. IPv4 networks wider than /24 and IPv6 networks wider than /64 are refused. If iPhone DHCP changes its address, update the allowlist or configure a DHCP reservation for the device.
+**This is NOT QTS administrator authentication.** Any person or software with LAN access to the service can intentionally submit a valid same-origin update using the public Web UI/API. This trades administrator-level approval for local-network convenience. Keep TCP 8778 restricted to a trusted network; disable router port forwarding and guest/Internet access. A network attacker on unencrypted HTTP could be able to interact with the service.
 
-## Security boundaries
+GitHub release SHA256SUMS is downloaded from the same GitHub release as the QPKG. It checks integrity against that source but is **not an independent cryptographic signature**. QTS `qpkg_cli` must exist and the service must have sufficient QTS permissions. Normal QTS upgrades, update worker lifecycle and rollback still need confirmation on the user's NAS; a CI-built QPKG does not prove QTS device upgrade.
 
-- The app checks the actual TCP source and listener address; proxy-provided IP headers do not establish trust. Host must contain the NAS's numeric LAN address and matching port; Origin, same-origin Fetch Metadata where present, JSON content type and a custom request-intent header must match.
-- A preparation request issues a single-use, 60-second confirmation bound to the client IP and release. Rate limiting caps preparation to five per client in ten minutes and 20 total. Cross-device or repeated execution fails.
-- Only the official GitHub release chosen by the server may be prepared. Existing SHA256 verification, maximum package size, RAM staging and fixed QTS command arguments remain unchanged.
-- **This is network authorization, not user login authentication.** A compromised approved device, malicious local program, or on-path attacker on an unencrypted LAN may still be dangerous. Use only genuinely trusted devices and networks; block guests, Internet port forwarding and untrusted reverse proxies. Prefer HTTPS via a properly authenticated deployment if your LAN is shared.
-- QTS `qpkg_cli` upgrade, service restart and rollback have **not** been validated on a physical NAS in this release candidate. Back up first and keep the preceding QPKG for manual recovery.
+The previous explicit-admin-token API path remains for compatibility with older automation, but the LAN Web UI never asks for or requires it. The local update availability check now requires only `qpkg_cli`, not token-file presence. No persistent write log, per-request filesystem scanning, restart scheduler or additional daemon is introduced.
 
-## Disable immediately
+### Troubleshooting
 
-```sh
-/sbin/setcfg QnapControlCenter LAN_Update_Enabled FALSE -f /etc/config/qpkg.conf
-```
-
-Afterwards, refresh the Web page. The legacy token-protected install endpoint remains available. If QTS updates alter custom `qpkg.conf` fields, repeat the setting check.
-
-Unmerged experimental QTS session PR #8 is **not** used for this feature; enabling LAN mode does not bypass or weaken QTS 2FA because no QTS password is requested at all. It instead delegates update authorization to an explicit administrator-defined trusted IP allowlist.
+- `GET /api/runtime`: verify running version and build ID. The GitHub latest version displayed on the page is not the NAS installed version.
+- `GET /api/update-status`: `lan_available=true` on an accepted LAN connection; `available=true` when `qpkg_cli` is usable.
+- `GET /api/write-log`: rolling RAM diagnostics remain read-only and unchanged.
+- To check an update failure, inspect Web status and `/var/run/qnapcontrolcenter-update-status.json`. No external URL or arbitrary QPKG upload is accepted.

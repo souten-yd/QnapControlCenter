@@ -39,5 +39,5 @@ def check_latest():
             assets.append(dict(name=name, size=asset.get("size", 0), url=url))
     return dict(tag=release["tag_name"], release_url=release["html_url"],
                 prerelease=bool(release.get("prerelease", False)),
-                qpkg=assets, install_supported=False,
-                message="Web installation is unavailable until QTS upgrade and recovery are device-verified.")
+                qpkg=assets, install_supported=bool(assets),
+                message="LAN Web installation needs only QTS qpkg_cli, a trusted local connection and an explicit confirmation.")
