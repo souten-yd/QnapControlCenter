@@ -56,6 +56,7 @@ $('check-update').addEventListener('click', checkUpdate);
 checkUpdate();
 
 let selectedRelease=null;
+let lanEnabled=false;
 const originalCheckUpdate=checkUpdate;
 async function updateStatus(){
  try{
@@ -63,6 +64,8 @@ async function updateStatus(){
   if(!r.ok)return;
   const v=await r.json();
   $('update-progress').textContent='更新状況: '+v.state+(v.message?' — '+v.message:'');
+  lanEnabled=Boolean(v.lan_available);
+  $('manual-token').hidden=lanEnabled;
   $('install-update').disabled=!v.available;
   if(!v.available){$('update-progress').textContent='Web更新は利用できません: QTSインストーラー（qpkg_cli）または更新権限を確認してください';}
  }catch(e){$('update-progress').textContent='更新状況の取得失敗';}
@@ -71,11 +74,24 @@ $('install-update').addEventListener('click',async()=>{
  const tag=selectedRelease;
  if(!tag){$('update-progress').textContent='先に最新版を確認してください';return;}
  if(!confirm(tag+' のQPKGをこのNASにインストールします。処理中は一時的に接続できなくなります。続行しますか？'))return;
- const token=$('update-token').value;
- if(!token){$('update-progress').textContent='管理トークンを入力してください';return;}
+ const token=lanEnabled?'':$('update-token').value;
+ if(!lanEnabled&&!token){$('update-progress').textContent='管理トークンを入力してください';return;}
  $('update-progress').textContent='更新を開始しています…';
  try{
-  const r=await fetch('/api/install-update',{method:'POST',headers:{'Content-Type':'application/json','X-QCC-Admin-Token':token},body:JSON.stringify({tag})});
+  const headers={'Content-Type':'application/json'};
+  let args={tag};
+  if(lanEnabled){
+    headers['X-QCC-Update-Intent']='1';
+    const prepared=await fetch('/api/prepare-update',{
+      method:'POST',headers,body:JSON.stringify({tag})
+    });
+    const p=await prepared.json();
+    if(!prepared.ok)throw new Error(p.error||'更新準備エラー: '+prepared.status);
+    args={tag,nonce:p.nonce};
+  }else{
+    headers['X-QCC-Admin-Token']=token;
+  }
+  const r=await fetch('/api/install-update',{method:'POST',headers,body:JSON.stringify(args)});
   const v=await r.json();
   $('update-progress').textContent=r.ok?'更新を開始しました。再起動後に再接続してください。':'更新開始エラー: '+(v.error||r.status);
  }catch(e){$('update-progress').textContent='更新通信に失敗: '+e.message;}

@@ -48,10 +48,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.8-rc10 >/dev/null 2>&1; then
-            echo 'Release v0.1.8-rc10 already exists; skipping duplicate publication.'
+          if gh release view v0.1.9-rc11 >/dev/null 2>&1; then
+            echo 'Release v0.1.9-rc11 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.8-rc10 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.8-rc10 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. Reboot readiness and iOS/QTS icons added; NAS boot, upgrade and rollback remain unverified. Back up before manual testing.'
+            gh release create v0.1.9-rc11 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.9-rc11 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. Opt-in allowlisted LAN updater added, with no token entry from approved LAN clients; QTS boot, upgrade and rollback remain device-unverified. Back up before manual testing.'
           fi

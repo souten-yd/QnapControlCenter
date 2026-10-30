@@ -17,3 +17,9 @@ The updater accepts only a release tag, validates tag format, fetches GitHub rel
 **Limitations:** SHA256SUMS from the same GitHub release detects transport corruption but is not an independent signature. The endpoint uses token + same-origin checks over HTTP: restrict port 8778 to a trusted LAN/Tailscale; untrusted Wi-Fi can disclose a token. QTS CLI flags and unsigned-QPKG acceptance can vary by firmware; test on the NAS before treating this as production ready. An independently detached worker is used because QTS may stop the Web process during upgrade. Token and progress state are stored in /var/run (tmpfs). A failed upgrade must be investigated through QTS App Center and device logs. No automatic rollback is claimed.
 
 The first update to v0.1.5 must still be performed manually because older versions do not expose an install API.
+
+## Optional authorized LAN update mode
+
+v0.1.9-rc11 adds a separate, opt-in LAN authorization path. Only an administrator-approved, allowlisted source address may prepare a 60-second, single-use confirmation. The final POST requires the same source address, exact published release, JSON/custom intent header and matching Origin/Host. No arbitrary QPKG URLs or command lines are accepted. The old admin token route remains unchanged.
+
+See [LAN update configuration](lan-update.md) for restrictions and activation.

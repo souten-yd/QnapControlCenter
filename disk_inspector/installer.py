@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -19,6 +20,7 @@ REPO = "souten-yd/QnapControlCenter"
 API = "https://api.github.com/repos/" + REPO + "/releases/tags/"
 TOKEN_FILE = Path("/var/run/qnapcontrolcenter-update-token")
 STATUS_FILE = Path("/var/run/qnapcontrolcenter-update-status.json")
+START_LOCK = threading.Lock()
 MAX_QPKG = 128 * 1024 * 1024
 MAX_CHECKSUM = 256 * 1024
 TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?$")
@@ -123,24 +125,29 @@ def worker(tag):
                 pass
 
 def start(tag):
+    if not TAG_RE.fullmatch(tag):
+        raise ValueError("Invalid release tag")
     if not ready():
         raise RuntimeError("Updater unavailable: qpkg_cli or admin token missing")
-    if STATUS_FILE.exists():
+    with START_LOCK:
+        current = status()
+        if current.get("state") in ("starting", "downloading", "installing"):
+            raise RuntimeError("An update is already running")
+        # Reserve the slot before spawning to prevent double-click races.
+        write_status("starting", "Launching QTS installer worker")
+        import sys
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
         try:
-            state = json.loads(STATUS_FILE.read_text()).get("state")
-            if state in ("downloading", "installing"):
-                raise RuntimeError("An update is already running")
-        except ValueError:
-            pass
-    # Launch independent child so QTS can stop/restart the HTTP service while installing.
-    import sys
-    import subprocess
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
-    subprocess.Popen([sys.executable, "-B", "-m", "disk_inspector.installer", "--apply", tag],
-                     env=env, cwd="/", stdin=subprocess.DEVNULL,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True, close_fds=True)
+            subprocess.Popen(
+                [sys.executable, "-B", "-m", "disk_inspector.installer", "--apply", tag],
+                env=env, cwd="/", stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True, close_fds=True,
+            )
+        except OSError:
+            write_status("error", "Could not launch QTS installer worker")
+            raise
     return {"state": "starting", "message": "Update requested"}
 
 def status():
