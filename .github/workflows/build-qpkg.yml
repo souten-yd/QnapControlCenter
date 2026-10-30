@@ -31,6 +31,12 @@ jobs:
           echo "/tmp/qcc-icon-venv/bin" >> "$GITHUB_PATH"
       - name: Build x86_64 QPKG
         run: sh packaging/build.sh
+      - name: Verify actual QPKG payload and advertised diagnostics
+        run: |
+          set -eu
+          for pkg in dist/*.qpkg; do
+            python3 scripts/verify_qpkg_payload.py "$pkg"
+          done
       - name: Check payload and checksums
         run: |
           set -eu
@@ -48,10 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.10-rc12 >/dev/null 2>&1; then
-            echo 'Release v0.1.10-rc12 already exists; skipping duplicate publication.'
+          if gh release view v0.1.11-rc13 >/dev/null 2>&1; then
+            echo 'Release v0.1.11-rc13 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.10-rc12 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.10-rc12 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. Rolling 5-minute RAM-only write diagnostics and bounded procfs FD candidate attribution added; QTS real-device behavior remains unverified. Back up before manual testing.'
+            gh release create v0.1.11-rc13 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.11-rc13 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. Runtime version and write-diagnostics visibility, QPKG payload verification and stale-process restart guards added. QTS NAS restart remains device-unverified. Back up before manual testing.'
           fi

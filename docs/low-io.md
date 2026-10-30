@@ -13,3 +13,7 @@ The baseline process-wide procfs sampling frequency remains 5 seconds, **not two
 The Web UI polls the in-memory /api/write-log endpoint every 15 seconds, not on every collector tick. The endpoint is read-only. The sampler measures its own write_bytes delta to reveal unexpected self-generated physical I/O; the expected steady-state value is close to zero but QTS/device behavior must be verified. Imports use Python -B under QTS. Kernel-visible procfs reads consume some CPU and memory even if physical disk reads are normally zero.
 
 Per-process write_bytes is not a file accounting API. Writable FD paths are **possible** targets, not proof of which file received the writes; inspect reported candidates and trace at the kernel level only if truly exact file-level attribution is needed. File paths can be sensitive: keep the unauthenticated read-only dashboard on a trusted LAN only.
+
+## Build identity check cost
+
+A small QPKG-embedded version JSON is read **once on server start**. `/api/runtime` is served from in-memory constants. CI inspects the build artifact during packaging; QTS never runs an asset build or package verification when serving the dashboard. If needed after an upgrade, the QTS start command checks the installed build metadata against the local live API before reusing an old service PID.

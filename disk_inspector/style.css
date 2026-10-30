@@ -11,3 +11,8 @@ input[type=password]{background:#0e1b31;border:1px solid #42577a;color:#fff;padd
 #write-procs pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:430px;font:12px ui-monospace,monospace}
 #write-procs summary{cursor:pointer;color:#86cfff}
 @media(max-width:700px){.write-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.write-interval{grid-template-columns:68px 1fr 70px}}
+
+.diagnostics-action{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 14px}
+.diagnostics-action #open-write-log{background:#136d70;border:1px solid #50c9bc;cursor:pointer}
+.diagnostics-action small{font-size:12px}
+#write-log{scroll-margin-top:16px}

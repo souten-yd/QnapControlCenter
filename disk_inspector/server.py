@@ -1,5 +1,6 @@
 """Lightweight read-only dashboard. localhost-only by default."""
 import argparse
+import os
 import json
 import threading
 import time
@@ -15,6 +16,31 @@ UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
 CSS = Path(__file__).with_name("style.css").read_bytes()
 ICON = Path(__file__).with_name("apple-touch-icon.png").read_bytes()
+
+def read_build_info():
+    """Startup-only package metadata; no repeated filesystem reads during polling."""
+    try:
+        data = json.loads(Path(__file__).with_name("build_info.json").read_text())
+        if isinstance(data, dict) and isinstance(data.get("version"), str):
+            return data
+    except (OSError, ValueError, TypeError):
+        pass
+    return {"version": "development", "build_id": "development", "commit": "local",
+            "features": ["write_diagnostics", "lan_updater"]}
+
+BUILD_INFO = read_build_info()
+RUNTIME_STARTED_AT = int(time.time())
+
+def runtime_info():
+    return {
+        "running_version": BUILD_INFO.get("version", "development"),
+        "build_id": BUILD_INFO.get("build_id", "development"),
+        "commit": BUILD_INFO.get("commit", "local"),
+        "started_at": RUNTIME_STARTED_AT,
+        "pid": os.getpid(),
+        "features": {"write_diagnostics": True, "lan_updater": True},
+        "diagnostics_endpoint": "/api/write-log",
+    }
 
 class State:
     def __init__(self):
@@ -55,6 +81,8 @@ def handler_factory(state):
                 payload, mime = CSS, "text/css; charset=utf-8"
             elif self.path == "/app.js":
                 payload, mime = JS, "text/javascript; charset=utf-8"
+            elif self.path == "/api/runtime":
+                payload, mime = json.dumps(runtime_info()).encode(), "application/json"
             elif self.path == "/api/update-status":
                 data=installer.status()
                 local, port = self.connection.getsockname()[:2]
@@ -83,7 +111,8 @@ def handler_factory(state):
                 return
             self.send_response(200)
             self.send_header("Content-Type", mime)
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", "no-store, max-age=0, must-revalidate")
+            self.send_header("Pragma", "no-cache")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'")
             self.end_headers()

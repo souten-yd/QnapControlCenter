@@ -56,7 +56,44 @@ start_service() {
   if [ -f "$PIDFILE" ]; then
     old="$(cat "$PIDFILE" 2>/dev/null)"
     if owned_pid "$old" && kill -0 "$old" 2>/dev/null; then
-      write_log "Already running pid=$old"; return 0
+      if resolve_base && detect_python; then
+        if [ -r "$BASE/disk_inspector/build_info.json" ] &&
+           QCC_EXPECTED_INFO="$BASE/disk_inspector/build_info.json" "$PYTHON" -B -c '
+import json, os, sys
+from urllib.request import urlopen
+try:
+    with open(os.environ["QCC_EXPECTED_INFO"], encoding="utf-8") as file:
+        expected = json.load(file)
+    with urlopen("http://127.0.0.1:8778/api/runtime", timeout=2) as response:
+        running = json.load(response)
+    sys.exit(0 if expected.get("build_id") and
+             expected["build_id"] == running.get("build_id") else 1)
+except (OSError, ValueError, KeyError):
+    sys.exit(1)
+' >/dev/null 2>&1; then
+          write_log "Already running correct build pid=$old"
+          return 0
+        fi
+        write_log "Installed build differs from running PID=$old (or runtime API unavailable); stopping stale process"
+        kill "$old" 2>/dev/null || { write_log "ERROR: unable to stop stale process"; return 1; }
+        waited=0
+        while kill -0 "$old" 2>/dev/null; do
+          # A zombie has released its listening socket; kill -0 still succeeds.
+          if [ -r "/proc/$old/stat" ]; then
+            current_state="$(sed 's/^.*) //' "/proc/$old/stat" 2>/dev/null | cut -c1)"
+            [ "$current_state" = Z ] && break
+          fi
+          if [ "$waited" -ge 8 ]; then
+            write_log "ERROR: previous process did not stop within 8 seconds"
+            return 1
+          fi
+          waited=$((waited + 1))
+          sleep 1
+        done
+      else
+        write_log "Already running pid=$old; installed volume/Python not yet available for version check"
+        return 0
+      fi
     fi
     rm -f "$PIDFILE"
   fi
