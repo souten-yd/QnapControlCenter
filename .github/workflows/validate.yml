@@ -28,6 +28,8 @@ jobs:
           PY
       - name: Check dashboard JavaScript syntax
         run: node --check disk_inspector/app.js
+      - name: AI diagnostic report formatter tests (browser-side, no NAS file writes)
+        run: node --test tests/test_write_report.cjs
       - name: Python compilation
         run: python -m compileall -q disk_inspector tests scripts
       - name: Unit tests

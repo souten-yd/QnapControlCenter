@@ -24,6 +24,7 @@ def verify_qpkg(path):
         required = (
             "disk_inspector/index.html",
             "disk_inspector/app.js",
+            "disk_inspector/write_report.js",
             "disk_inspector/server.py",
             "disk_inspector/write_log.py",
             "disk_inspector/build_info.json",
@@ -36,6 +37,7 @@ def verify_qpkg(path):
             return archive.extractfile(members[name]).read()
         html = load("disk_inspector/index.html").decode("utf-8")
         js = load("disk_inspector/app.js").decode("utf-8")
+        report_js = load("disk_inspector/write_report.js").decode("utf-8")
         server = load("disk_inspector/server.py").decode("utf-8")
         info = json.loads(load("disk_inspector/build_info.json"))
         if ('update-token' in html or 'manual-token' in html):
@@ -46,6 +48,14 @@ def verify_qpkg(path):
                 "/api/write-log" not in server or
                 "/api/runtime" not in server):
             raise ValueError("QPKG write diagnostics UI/API contract is missing")
+        if ('id="download-write-report"' not in html or
+                'src="/write_report.js"' not in html or
+                "/api/write-log" not in js or
+                "QCCWriteReport.format" not in js or
+                "BEGIN_QCC_WRITE_SNAPSHOT_JSON" not in report_js or
+                "report_schema: 'qcc-write-diagnostics-v1'" not in report_js or
+                "/write_report.js" not in server):
+            raise ValueError("QPKG AI diagnostic text export UI/JS/API contract missing")
         expected = re.search(r"QnapControlCenter_([0-9]+(?:[.][0-9]+){2})_", path.name)
         if not expected or info.get("version") != expected[1]:
             raise ValueError("QPKG filename and bundled runtime version differ")

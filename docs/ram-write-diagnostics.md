@@ -37,3 +37,20 @@ The read-only `GET /api/write-log` response may contain real absolute paths unde
 v0.1.11-rc13 adds a visible **書込診断を表示（直近5分）** button near the dashboard summary. It scrolls directly to the 300-second RAM diagnostic. The header and update panel now display the running server version, not merely the latest public release. `GET /api/runtime` reports the running build identifier and supported feature flags. CI opens the actual built QPKG data archive and verifies UI, API and bundled version metadata; a built package missing the diagnostics entry point cannot pass the release workflow.
 
 Python only reads the stamped JSON at startup. No new periodic filesystem access, database or persistent logging is introduced.
+
+## Browser-only AI diagnostic text export (v0.1.15-rc17)
+
+Press **AI解析用テキストをDL（直近5分）** in the 5-minute write diagnostics panel. The browser requests a **fresh, read-only** `GET /api/write-log` snapshot and optional `GET /api/runtime` version metadata, then creates an UTF-8 BOM `.txt` download using `Blob` and a local object URL. The **NAS never writes the exported report file**. Report generation is on-demand only, not during periodic sampling; the existing 5-second collector and 15-second read-only dashboard polls remain unchanged.
+
+The report contains:
+- UTC export time, source endpoint, running version/build ID if available, number of samples, rolling window start/end and 300-second retention limit;
+- per-physical-disk and process write-byte totals, unranked process bytes, monitor's own write_bytes and accumulated collector wall time;
+- up to 24 top processes, PID + process start identity, inferred QPKG, executable, cwd, observed writable-FD file paths with candidate observation time and process write contribution **relative to measured process bytes**;
+- 5-second timestamped disk/process/monitor deltas, original collector limitations, actionable AI diagnosis instructions (impact/safety/rollback/read-only confirmation);
+- JSON of the exact `/api/write-log` snapshot (and optional runtime metadata), enclosed between `BEGIN_QCC_WRITE_SNAPSHOT_JSON` and `END_QCC_WRITE_SNAPSHOT_JSON` for machine parsing.
+
+**This export never claims exact per-file byte counts.** Physical RAID device totals cannot be simply summed as logical writes, and physical bytes cannot be added to per-process bytes. Writable FD paths are hints, not confirmed writers. Missing procfs data is not evidence of zero writes. If no valid samples exist, the download button explains that the collector has not yet produced data; it does not fabricate a zero-write report.
+
+**Privacy:** This text may contain usernames, directory names, executable paths and file names; inspect/redact it before sharing with an external AI service. The file is saved only to the browser's chosen download destination. Browser downloads on the NAS itself or to NAS-backed shares can write there indirectly; use a separate local client when minimizing NAS writes.
+
+The format tests run with Node.js during CI and inspect output with Unicode paths, process attribution, source JSON completeness, and no input mutation. The final CI-assembled QPKG is inspected for the button, new JS module and HTTP route.

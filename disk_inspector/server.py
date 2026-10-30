@@ -14,6 +14,7 @@ from . import installer, lan_update
 
 UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
+REPORT_JS = Path(__file__).with_name("write_report.js").read_bytes()
 CSS = Path(__file__).with_name("style.css").read_bytes()
 ICON = Path(__file__).with_name("apple-touch-icon.png").read_bytes()
 
@@ -81,6 +82,8 @@ def handler_factory(state):
                 payload, mime = CSS, "text/css; charset=utf-8"
             elif self.path == "/app.js":
                 payload, mime = JS, "text/javascript; charset=utf-8"
+            elif self.path == "/write_report.js":
+                payload, mime = REPORT_JS, "text/javascript; charset=utf-8"
             elif self.path == "/api/runtime":
                 payload, mime = json.dumps(runtime_info()).encode(), "application/json"
             elif self.path == "/api/update-status":
