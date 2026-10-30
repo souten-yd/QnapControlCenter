@@ -184,3 +184,34 @@ async function refreshWriteLog() {
 }
 refreshWriteLog();
 setInterval(refreshWriteLog, 15000);
+
+async function showRunningVersion() {
+  try {
+    const response = await fetch('/api/runtime', {cache:'no-store'});
+    if (!response.ok) throw Error('HTTP ' + response.status);
+    const info = await response.json();
+    const version = info.running_version || '不明';
+    const commit = String(info.commit || 'local');
+    const suffix = commit === 'local' ? 'local' : commit.slice(0, 12);
+    $('running-version').textContent = '稼働版 ' + version + ' (' + suffix + ')';
+    $('current-version').textContent = version + ' / build ' + (info.build_id || '不明');
+    $('diag-state').textContent = info.features && info.features.write_diagnostics
+      ? '常時計測中 / RAM保存300秒 / 稼働版 ' + version
+      : 'この稼働サーバーに診断機能なし / QTS App Centerから再起動してください';
+    if (!info.features || !info.features.write_diagnostics) {
+      $('log-meta').textContent = 'この稼働サーバーには書込診断がありません。QTS App Centerで再起動・更新してください。';
+    }
+  } catch (error) {
+    $('running-version').textContent = '稼働版不明';
+    $('current-version').textContent = '稼働版API未対応 / サーバー再起動を確認';
+    $('diag-state').textContent = '実行中のバージョンを確認できません';
+  }
+}
+showRunningVersion();
+
+// Keep the diagnosis entry point visible independent of narrow navigation menus.
+$('open-write-log').addEventListener('click', () => {
+  const section = $('write-log');
+  section.scrollIntoView({behavior:'smooth',block:'start'});
+  refreshWriteLog();
+});

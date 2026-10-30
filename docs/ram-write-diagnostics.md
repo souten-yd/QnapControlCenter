@@ -31,3 +31,9 @@ The read-only `GET /api/write-log` response may contain real absolute paths unde
 - 5-minute top writers, cumulative physical disk writes, process totals and candidate paths display in the Japanese UI.
 - Server's own disk write counter and sampling wall time are displayed for overhead monitoring.
 - Read-only endpoint, no new POST or execution behavior, existing update authentication untouched.
+
+## Web entry point and runtime verification
+
+v0.1.11-rc13 adds a visible **書込診断を表示（直近5分）** button near the dashboard summary. It scrolls directly to the 300-second RAM diagnostic. The header and update panel now display the running server version, not merely the latest public release. `GET /api/runtime` reports the running build identifier and supported feature flags. CI opens the actual built QPKG data archive and verifies UI, API and bundled version metadata; a built package missing the diagnostics entry point cannot pass the release workflow.
+
+Python only reads the stamped JSON at startup. No new periodic filesystem access, database or persistent logging is introduced.

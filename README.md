@@ -13,7 +13,7 @@ Open http://127.0.0.1:8778. The QPKG service is configured for trusted LAN/Tails
 
 See `docs/disk-inspector-design.md`, `docs/installation.md`, and `docs/development-release-process.md`.
 
-**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.10-rc12 is a CI-built candidate only; no device-tested production QPKG.
+**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.11-rc13 is a CI-built candidate only; no device-tested production QPKG.
 
 New installs request QTS-managed auto-start; upgrades preserve QTS's existing enabled/disabled state. Startup has a bounded wait for late-mounted storage/Python. See [reboot checks](docs/installation.md#nas-reboot-auto-start-check).
 
@@ -30,3 +30,11 @@ Existing token-based Web updates are preserved for non-allowlisted clients. LAN 
 The **書込診断** tab continuously samples existing disk/procfs counters every 5 seconds and holds only the latest **300 seconds in RAM**. The same existing /proc/PID/io scan feeds process totals, without a duplicate process-wide scan. Every 30 seconds the collector examines write-capable /proc/PID/fdinfo descriptors for at most the top 6 writing processes, checking no more than 48 descriptors per process. This adds no normal filesystem content reads or log writes.
 
 The UI reports disk counters, process counters, approximate QPKG owner hints, executable/current directory, write-capable *open-file candidates*, and its own process physical write_bytes delta. Paths are **not confirmed per-file write events** and cannot support exact per-file byte counts without more invasive tracing. RAID, snapshots, journal, permission restrictions and short-lived descriptors can create unattributed writes. See [RAM write diagnostics](docs/ram-write-diagnostics.md) for limitations, memory bounds and security.
+
+## Diagnosing a missing Write Diagnostics control
+
+A GitHub release notification reports the **latest downloadable release**, not the version currently running on the NAS. In v0.1.11-rc13, the header and update section display the version and build ID of the **running Python server**. A prominent **書込診断を表示（直近5分）** button jumps to the diagnostics panel. The live server reports its identity on read-only `GET /api/runtime`, and the write data comes from `GET /api/write-log`.
+
+The QPKG build stamps its source version/commit into `disk_inspector/build_info.json`; CI extracts the actual final QPKG and checks that it contains the HTML button, JavaScript handler, server endpoints and writer collector. This catches package-vs-source drift. Static HTML and JS remain loaded in memory at server startup to avoid repeated disk reads. When a QTS upgrade leaves an old Python PID running, the new QPKG start script will identify the mismatch and stop only its verified own PID, before relaunching; this behavior still needs real-NAS confirmation.
+
+If you still see only the old menu (概要/ディスク/プロセス/更新), the old server is serving the page. In QTS App Center stop and start QnapControlCenter once; then force-reload Safari/Chrome, and inspect `http://NAS-IP:8778/api/runtime` and `http://NAS-IP:8778/api/write-log`. A 404 on the runtime endpoint or a missing diagnostics link usually indicates stale code. Use the App Center manual QPKG installer if the older package remains. Do not kill an arbitrary python PID or expose port 8778 publicly.

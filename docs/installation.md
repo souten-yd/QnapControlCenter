@@ -59,3 +59,21 @@ The build generates a 180x180 `apple-touch-icon.png` for iPhone Safari **Share �
 Starting with the **v0.1.9-rc11 candidate**, authorized LAN clients can check for releases and explicitly install them without typing the admin token. This is an opt-in exception approved by the NAS administrator through `/etc/config/qpkg.conf`, not a QTS login bypass for all LAN devices. The original token path remains.
 
 See [LAN update configuration and safety](lan-update.md). Restrict to an individual device IP (/32) where practical, or a single trusted /24 subnet if all clients are trusted. NAS firewall and router must block public and guest access to TCP 8778. QTS installer behavior and rollback require real NAS testing.
+
+## Missing 書込診断 / installed update not visible (v0.1.11-rc13)
+
+The "Latest GitHub release" in the update panel **does not mean the NAS has installed it**. The v0.1.11-rc13 dashboard now has a prominent `書込診断を表示（直近5分）` button and reports the running service version and build ID on the header / update panel.
+
+To identify the active server, open these URLs from a trusted LAN:
+- `http://NAS-IP:8778/api/runtime` — running version, build ID, PID, startup time and feature flags; absence (404) suggests an older process.
+- `http://NAS-IP:8778/api/write-log` — current in-memory diagnostics, even when fewer than 300 seconds have elapsed.
+
+If the running version is stale, stop and start QnapControlCenter from QTS App Center, then force reload the browser. The packaged init script compares the running build ID to the installed `disk_inspector/build_info.json` and replaces only the recognized QnapControlCenter service PID when the builds differ. If the service cannot start or the endpoint is absent, inspect:
+```sh
+/sbin/getcfg QnapControlCenter Version -f /etc/config/qpkg.conf
+/sbin/getcfg QnapControlCenter Install_Path -f /etc/config/qpkg.conf
+cat /var/run/qnapcontrolcenter-startup.log
+curl --max-time 5 http://127.0.0.1:8778/api/runtime
+curl --max-time 5 http://127.0.0.1:8778/api/write-log
+```
+These diagnostics do not require creating a persistent log. Browser history caching is discouraged with no-store headers, but the server's startup-loaded assets still require a proper process restart to change. Do not terminate unrelated processes. QTS reboot behavior still requires verification on a real NAS.
