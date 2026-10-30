@@ -26,6 +26,8 @@ jobs:
               with Image.open(p/name) as im:
                   assert im.size == (size,size) and im.format == 'PNG'
           PY
+      - name: Check dashboard JavaScript syntax
+        run: node --check disk_inspector/app.js
       - name: Python compilation
         run: python -m compileall -q disk_inspector tests scripts
       - name: Unit tests
