@@ -19,6 +19,10 @@ SERVICE = ROOT / "packaging/shared/QnapControlCenter.sh"
 
 FAKE_SERVER = '''
 import json, os, time
+# Signal only after the module is fully imported. The cwd may be deleted
+# by the upgrade simulation immediately after this marker appears.
+with open(os.environ["QCC_FAKE_READY"], "w", encoding="utf-8") as signal:
+    signal.write(str(os.getpid()))
 if os.environ.get("QCC_FAKE_LISTEN") == "TRUE":
     from http.server import HTTPServer, BaseHTTPRequestHandler
     class Handler(BaseHTTPRequestHandler):
@@ -79,9 +83,10 @@ class StaleProcessTests(unittest.TestCase):
                     process.wait(timeout=3)
 
     def spawn(self, folder, listener=False, build="old"):
+        ready = Path(self.temp.name) / ("ready-%d" % len(self.spawned))
         env = dict(self.env, PYTHONPATH=str(folder),
                    QCC_FAKE_LISTEN="TRUE" if listener else "FALSE",
-                   QCC_FAKE_BUILD=build)
+                   QCC_FAKE_BUILD=build, QCC_FAKE_READY=str(ready))
         proc = subprocess.Popen([
             sys.executable, "-B", "-m", "disk_inspector.server",
             "--host", "0.0.0.0", "--port", "8778",
@@ -92,7 +97,7 @@ class StaleProcessTests(unittest.TestCase):
             if proc.poll() is not None:
                 raise AssertionError("fake server exited early")
             try:
-                if Path("/proc/%d/cwd" % proc.pid).resolve() == folder:
+                if ready.is_file() and Path("/proc/%d/cwd" % proc.pid).resolve() == folder:
                     break
             except OSError:
                 pass
