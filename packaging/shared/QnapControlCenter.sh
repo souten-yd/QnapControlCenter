@@ -61,12 +61,31 @@ owned_pid() {
   # First cheaply filter by QPKG cwd: only inspect cmdline and liveness of
   # processes that actually started inside this installation.
   cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || return 1
-  [ "$cwd" = "$BASE" ] || return 1
-  cmd="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" || return 1
-  case "$cmd" in
-    *" -m disk_inspector.server --host 0.0.0.0 --port 8778"*) pid_live "$pid" ;;
+  # QTS may replace/remove the old package directory during an upgrade.
+  # A still-live former service then has cwd exactly "$BASE (deleted)".
+  # Only accept this single kernel readlink suffix, never a prefix/substring.
+  case "$cwd" in
+    "$BASE"|"$BASE (deleted)") ;;
     *) return 1 ;;
   esac
+  # Read NUL-separated argv without BusyBox tr quoting/escape differences.
+  # This is invoked only for PIDs whose cwd matches the exact QPKG directory.
+  [ -n "$PYTHON" ] || return 1
+  "$PYTHON" -B -c '
+import os, re, sys
+try:
+    with open("/proc/%s/cmdline" % sys.argv[1], "rb") as file:
+        argv = [x.decode("utf-8", "strict") for x in file.read().split(b"\x00") if x]
+    expected = ["-B", "-m", "disk_inspector.server",
+                "--host", "0.0.0.0", "--port", "8778"]
+    valid = (len(argv) == 1 + len(expected)
+             and re.fullmatch(r"python(?:3(?:\.[0-9]+)?)?", os.path.basename(argv[0]))
+             and argv[1:] == expected)
+    sys.exit(0 if valid else 1)
+except (OSError, UnicodeError, ValueError):
+    sys.exit(1)
+' "$pid" >/dev/null 2>&1 || return 1
+  pid_live "$pid"
 }
 owned_processes() {
   for dir in /proc/[0-9]*; do
@@ -206,7 +225,7 @@ start_service() {
   return 1
 }
 stop_service() {
-  if ! resolve_base; then
+  if ! resolve_base || ! detect_python; then
     write_log "ERROR: cannot identify installed QPKG root; refusing to kill unknown PIDs"
     return 1
   fi
@@ -220,7 +239,7 @@ stop_service() {
 }
 status_service() {
   if ! enabled; then echo disabled; return 1; fi
-  resolve_base || { echo stopped; return 1; }
+  resolve_base && detect_python || { echo stopped; return 1; }
   for candidate in $(owned_processes); do
     echo running
     return 0
