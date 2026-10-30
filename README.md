@@ -13,8 +13,14 @@ Open http://127.0.0.1:8778. The QPKG service is configured for trusted LAN/Tails
 
 See `docs/disk-inspector-design.md`, `docs/installation.md`, and `docs/development-release-process.md`.
 
-**Web updates:** Version lookup works, but the token-protected QTS installer path remains experimental and is not NAS-validated. **Release status:** v0.1.8-rc10 is a CI-built candidate only; no device-tested production QPKG.
+**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.9-rc11 is a CI-built candidate only; no device-tested production QPKG.
 
 New installs request QTS-managed auto-start; upgrades preserve QTS's existing enabled/disabled state. Startup has a bounded wait for late-mounted storage/Python. See [reboot checks](docs/installation.md#nas-reboot-auto-start-check).
 
 The iPhone Home Screen and QTS App Center icons are generated from `assets/qcc-icon.svg` during QPKG build (Python CairoSVG and Pillow).
+
+## LAN Web updates (v0.1.9-rc11 candidate)
+
+The dashboard can update QnapControlCenter **without typing a management token** from an explicitly allowlisted LAN client. For safety, LAN updates are disabled by default, and are not enabled simply because the IP is private. Admin-approved setup is one-time via the NAS's QTS configuration; see [LAN update configuration](docs/lan-update.md). When active, the token field disappears on the authorized client's dashboard and an explicit confirmation is still required.
+
+Existing token-based Web updates are preserved for non-allowlisted clients. LAN updates require a numeric NAS LAN address and same-origin requests. They do not authenticate individual QTS users, so only allow devices you fully trust. No Internet/guest-Wi-Fi access; no automatic installation. Real-device QTS upgrade and rollback remain unverified.

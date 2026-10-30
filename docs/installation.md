@@ -53,3 +53,9 @@ Expected: `Enable=TRUE`; Shell registered to QnapControlCenter.sh; port 8778 lis
 ### iPhone / QNAP icons
 
 The build generates a 180x180 `apple-touch-icon.png` for iPhone Safari **Share → Add to Home Screen**, plus 64x64 enabled and grayscale and 80x80 detail PNGs for QDK App Center icons. Remove and recreate an old iPhone shortcut if the icon remains cached. The QPKG build uses `assets/qcc-icon.svg` as its artwork source and depends on `cairosvg` and `Pillow` only on the build machine, not on QTS. Icon display and reboot behavior remain subject to real-NAS verification.
+
+## Tokenless LAN updates
+
+Starting with the **v0.1.9-rc11 candidate**, authorized LAN clients can check for releases and explicitly install them without typing the admin token. This is an opt-in exception approved by the NAS administrator through `/etc/config/qpkg.conf`, not a QTS login bypass for all LAN devices. The original token path remains.
+
+See [LAN update configuration and safety](lan-update.md). Restrict to an individual device IP (/32) where practical, or a single trusted /24 subnet if all clients are trusted. NAS firewall and router must block public and guest access to TCP 8778. QTS installer behavior and rollback require real NAS testing.
