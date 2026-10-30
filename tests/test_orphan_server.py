@@ -193,8 +193,8 @@ class StaleProcessTests(unittest.TestCase):
 
     def test_matching_existing_process_repairs_stale_pidfile(self):
         (self.installed / "disk_inspector/build_info.json").write_text(
-            json.dumps({"build_id": "0.1.12+test"}))
-        process = self.spawn(self.installed, listener=True, build="0.1.12+test")
+            json.dumps({"build_id": "0.1.13+test"}))
+        process = self.spawn(self.installed, listener=True, build="0.1.13+test")
         self.pidfile.write_text("12734\n")
         result = self.run_service("start")
         self.assertEqual(result.returncode, 0, self.log.read_text())
