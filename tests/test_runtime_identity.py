@@ -73,7 +73,10 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_service_stale_version_guard_present(self):
         launcher = (ROOT / "packaging/shared/QnapControlCenter.sh").read_text()
         self.assertIn("/api/runtime", launcher)
-        self.assertIn("Installed build differs", launcher)
+        self.assertIn("Stale PID file", launcher)
+        self.assertIn("reconcile_owned", launcher)
+        self.assertIn('running.get("pid")', launcher)
+        self.assertIn("port_available", launcher)
         self.assertIn("QCC_EXPECTED_INFO", launcher)
         self.assertIn('owned_pid "$old"', launcher)
 
