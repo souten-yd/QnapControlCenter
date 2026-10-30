@@ -54,3 +54,7 @@ For immediate recovery of 0.1.12, use a one-time verified SIGTERM to the confirm
 ## Zero-setup LAN Web updating (v0.1.14-rc16)
 
 Open `http://NAS-IP:8778/` on a trusted private LAN, click 最新版を確認 then 更新をインストール and confirm. No IP allowlist configuration or manual token is required. The Web UI uses a short-lived automatic confirmation and retains same-origin checks; only the official checksum-verified QPKG can be applied. QTS `qpkg_cli` must exist. Anyone on that LAN can request an update, so do not expose port 8778 to guest/public networks. See [LAN update details](docs/lan-update.md).
+
+## AI-ready 300-second RAM write report (v0.1.15-rc17)
+
+Click the **AI解析用テキストをDL（直近5分）** button on 書込診断 to save an AI-friendly .txt report to the browser's download device. The NAS performs no extra filesystem write or trace. The report includes a readable Japanese diagnosis brief, physical disk/process totals, per-process candidate paths and package hints, time series, sample limits and original structured JSON. Upload the .txt to an AI for a prioritized, reversible, low-I/O plan. File paths may reveal personal information, so redact sensitive paths before sharing. See [RAM write diagnostics](docs/ram-write-diagnostics.md).

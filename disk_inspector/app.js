@@ -95,6 +95,48 @@ $('install-update').addEventListener('click',async()=>{
 setInterval(updateStatus,5000);
 updateStatus();
 
+// Generate an AI-ready text file entirely in the browser on explicit click.
+$('download-write-report').addEventListener('click', async () => {
+  const button = $('download-write-report');
+  const status = $('write-report-status');
+  button.disabled = true;
+  status.textContent = 'RAM診断の最新スナップショットを取得中…';
+  try {
+    const response = await fetch('/api/write-log', {cache: 'no-store'});
+    if (!response.ok) throw Error('書込診断 API HTTP ' + response.status);
+    const data = await response.json();
+    if (!Number(data.sample_count)) {
+      throw Error('正常サンプルがまだありません。数秒後に再度実行してください');
+    }
+    // Runtime identity is helpful metadata but must not block report export.
+    let runtime = null;
+    try {
+      const identity = await fetch('/api/runtime', {cache: 'no-store'});
+      if (identity.ok) runtime = await identity.json();
+    } catch (_) { /* Report remains usable even when version endpoint fails. */ }
+    const now = new Date();
+    const output = window.QCCWriteReport.format(data, runtime, now);
+    const blob = new Blob(['\uFEFF', output], {type: 'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = window.QCCWriteReport.fileName(now);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      status.textContent = 'ダウンロードを開始しました。AIに渡す前にファイルパス等を確認してください。';
+    } finally {
+      // Release the client-side Blob after the browser starts downloading.
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+  } catch (error) {
+    status.textContent = 'テキスト出力に失敗: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 const bytesLabel = bytes => {
   const n = Number(bytes) || 0;
   if (n >= 1048576) return (n/1048576).toFixed(2) + ' MiB';

@@ -16,3 +16,8 @@ input[type=password]{background:#0e1b31;border:1px solid #42577a;color:#fff;padd
 .diagnostics-action #open-write-log{background:#136d70;border:1px solid #50c9bc;cursor:pointer}
 .diagnostics-action small{font-size:12px}
 #write-log{scroll-margin-top:16px}
+
+/* Browser-only AI text export. Keep control accessible on narrow phones. */
+.write-export-action { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0.6rem 1rem; margin:0.6rem 0 1rem; }
+.write-export-action button { max-width:100%; white-space:normal; }
+.write-export-action small { flex:1 1 17rem; color:var(--muted, #9aa6ba); overflow-wrap:anywhere; }
