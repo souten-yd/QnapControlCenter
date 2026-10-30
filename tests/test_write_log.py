@@ -102,7 +102,7 @@ class FdInspectionTests(unittest.TestCase):
             (pidroot / "fd").mkdir(parents=True)
             (pidroot / "fdinfo").mkdir()
             fields = ["0"] * 20
-            fields[19] = "456"
+            fields[18] = "456"
             (pidroot / "stat").write_text("123 (python worker) S " +
                                            " ".join(fields))
             (pidroot / "fdinfo/3").write_text("pos:\t0\nflags:\t0100002\n")
