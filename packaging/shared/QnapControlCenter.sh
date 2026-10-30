@@ -75,11 +75,11 @@ owned_pid() {
 import os, re, sys
 try:
     with open("/proc/%s/cmdline" % sys.argv[1], "rb") as file:
-        argv = [x.decode("utf-8", "strict") for x in file.read().split(b"\\x00") if x]
+        argv = [x.decode("utf-8", "strict") for x in file.read().split(b"\x00") if x]
     expected = ["-B", "-m", "disk_inspector.server",
                 "--host", "0.0.0.0", "--port", "8778"]
     valid = (len(argv) == 1 + len(expected)
-             and re.fullmatch(r"python3(?:\\.[0-9]+)?", os.path.basename(argv[0]))
+             and re.fullmatch(r"python3(?:\.[0-9]+)?", os.path.basename(argv[0]))
              and argv[1:] == expected)
     sys.exit(0 if valid else 1)
 except (OSError, UnicodeError, ValueError):
