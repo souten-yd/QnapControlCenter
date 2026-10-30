@@ -77,3 +77,11 @@ curl --max-time 5 http://127.0.0.1:8778/api/runtime
 curl --max-time 5 http://127.0.0.1:8778/api/write-log
 ```
 These diagnostics do not require creating a persistent log. Browser history caching is discouraged with no-store headers, but the server's startup-loaded assets still require a proper process restart to change. Do not terminate unrelated processes. QTS reboot behavior still requires verification on a real NAS.
+
+## Confirmed QTS orphan-PID failure and recovery (0.1.12-rc14)
+
+Observed on SoutenNas (2026-10-30): `/var/run/qnapcontrolcenter.pid` recorded `12734`, but the actual process was `12825 admin /opt/bin/python3.11 -B -m disk_inspector.server --host 0.0.0.0 --port 8778`. `/api/runtime` and `/api/write-log` returned 404. The startup log showed `PID owner mismatch; no process killed`, followed by `OSError: [Errno 98] Address already in use` and a **false** `Web UI ready` message. This is an actual orphaned previous server, not a missing UI in the GitHub QPKG.
+
+Fix: the QTS service scans `/proc` only on its start/stop events to find an exact process command *and* cwd matching the configured Install_Path. Orphaned or mismatched-pidfile processes that meet BOTH checks are given bounded SIGTERM, and the port is verified free before starting. No unrelated process is killed; if the port remains occupied by an unknown process, startup fails with an explicit log rather than claiming readiness. HTTP health now requires the new server's `/api/runtime` response to report the same PID and packaged build ID. Status also checks actual owned processes. This does not alter polling, write diagnostic capture, updater authentication or QPKG Enable=FALSE behavior.
+
+After installing `v0.1.12-rc14` through App Center, stop and start the application once. Check `http://NAS-IP:8778/api/runtime` and confirm `running_version=0.1.12`; `/api/write-log` must return the rolling RAM history. If it fails, collect `/var/run/qnapcontrolcenter-startup.log` before rebooting and check configured QPKG Install_Path and running PID/cwd; do not kill an arbitrary Python service. Physical QTS install and reboot behavior still require on-device validation.
