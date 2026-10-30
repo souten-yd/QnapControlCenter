@@ -1,25 +1,11 @@
-# Web QPKG updater (v0.1.5-rc6 experimental)
+# Web QPKG updater (LAN, v0.1.14-rc16)
 
-The Web dashboard exposes **更新をインストール** for QTS 5.x test devices. After a one-time manual update to this version, future upgrades can be requested from the Web UI. Actual successful device upgrade is **not yet verified**.
+The NAS dashboard supports updating from an **ordinary private LAN connection without any manual token or allowlist setup**. Open `http://NAS-IP:8778/`, select the published GitHub QPKG release and confirm **更新をインストール**. The page handles a one-use in-memory confirmation automatically. No SSH setup, manual token or IP permission configuration is necessary.
 
-## Initial setup
+**Requirements:** NAS service enabled/running, accessible from a private LAN socket IP, and QTS `qpkg_cli` available to the server. If the updater is not available, its status shows why. New updates may temporarily stop the Web UI; after restart confirm `/api/runtime` matches the released package.
 
-1. Install v0.1.5-rc6 through QTS App Center once.
-2. Ensure `qpkg_cli` exists and the Web UI reports updater available.
-3. Over SSH obtain the locally-generated admin token: `cat /var/run/qnapcontrolcenter-update-token` (root/authorized administrator only). The token is generated at service start if absent; it lives in tmpfs and changes after NAS reboot.
-4. Paste the token into the Web UI, select latest release, and explicitly confirm. The token is not stored by the browser.
-5. Observe update state and reconnect after the QTS service restarts. Check `/var/run/qnapcontrolcenter-update-status.json` if disconnected.
+**Security:** No QTS identity check is performed for this LAN workflow. Any LAN user/process able to reach the Web service can request installation of **official current QnapControlCenter releases**. Never expose port 8778 to public/guest networks or port-forward it. The same-origin Origin/Host/custom-header checks and one-use nonce prevent ordinary cross-site/double-submit requests, but do not make LAN clients authenticated administrators.
 
-## Security and limitations
+The backend validates the fixed GitHub repository/release, SHA256SUMS, expected size, allowed HTTPS host and fixed `qpkg_cli -m` argument; no user-supplied command, package URL or file path. SHA256SUMS from the same release is not an independent cryptographic signature. Staging is under RAM-mounted `/dev/shm`. The legacy token-authorized API remains only for older external automation; the LAN page never uses it. Real QTS updater success/recovery after an actual installation must be verified on the NAS.
 
-The updater accepts only a release tag, validates tag format, fetches GitHub release metadata from the fixed owner/repository, checks the release asset path, requires exactly one QPKG and a SHA256SUMS file, checks package size and SHA256, and invokes `qpkg_cli -m` with a fixed argument pattern. No shell interpolation or caller-provided commands/paths.
-
-**Limitations:** SHA256SUMS from the same GitHub release detects transport corruption but is not an independent signature. The endpoint uses token + same-origin checks over HTTP: restrict port 8778 to a trusted LAN/Tailscale; untrusted Wi-Fi can disclose a token. QTS CLI flags and unsigned-QPKG acceptance can vary by firmware; test on the NAS before treating this as production ready. An independently detached worker is used because QTS may stop the Web process during upgrade. Token and progress state are stored in /var/run (tmpfs). A failed upgrade must be investigated through QTS App Center and device logs. No automatic rollback is claimed.
-
-The first update to v0.1.5 must still be performed manually because older versions do not expose an install API.
-
-## Optional authorized LAN update mode
-
-v0.1.9-rc11 adds a separate, opt-in LAN authorization path. Only an administrator-approved, allowlisted source address may prepare a 60-second, single-use confirmation. The final POST requires the same source address, exact published release, JSON/custom intent header and matching Origin/Host. No arbitrary QPKG URLs or command lines are accepted. The old admin token route remains unchanged.
-
-See [LAN update configuration](lan-update.md) for restrictions and activation.
+See [LAN update details](lan-update.md).

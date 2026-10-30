@@ -1,7 +1,7 @@
 """Restricted QPKG update preparation and one-shot installer worker.
 
 No arbitrary URL, package path, command or shell interpolation is accepted.
-A per-install admin token is required; disabled without QTS qpkg_cli.
+LAN-only Web updates use a one-use confirmation with no administrator setup or token. The legacy admin-token path is retained for compatible clients.
 """
 import hashlib
 import hmac
@@ -28,7 +28,7 @@ ASSET_RE = re.compile(r"^QnapControlCenter.*\.qpkg$", re.I)
 
 def ready():
     cli = shutil.which("qpkg_cli")
-    return bool(cli and Path(cli).is_file() and TOKEN_FILE.is_file())
+    return bool(cli and Path(cli).is_file())
 
 def authenticate(token):
     try:
@@ -128,7 +128,7 @@ def start(tag):
     if not TAG_RE.fullmatch(tag):
         raise ValueError("Invalid release tag")
     if not ready():
-        raise RuntimeError("Updater unavailable: qpkg_cli or admin token missing")
+        raise RuntimeError("Updater unavailable: QTS qpkg_cli is missing")
     with START_LOCK:
         current = status()
         if current.get("state") in ("starting", "downloading", "installing"):

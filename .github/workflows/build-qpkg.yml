@@ -54,10 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.13-rc15 >/dev/null 2>&1; then
-            echo 'Release v0.1.13-rc15 already exists; skipping duplicate publication.'
+          if gh release view v0.1.14-rc16 >/dev/null 2>&1; then
+            echo 'Release v0.1.14-rc16 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.13-rc15 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.13-rc15 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. Handle QTS upgraded/deleted package cwd for orphaned old servers; exact NUL-separated process argv and installation root verified before SIGTERM, no unrelated process termination. NAS test pending. Back up before manual testing.'
+            gh release create v0.1.14-rc16 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.14-rc16 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. Zero-setup LAN Web updating for official checksum-verified QPKGs: no user-entered token or IP allowlist; same-origin protections, one-use confirmation and safe installer remain. NAS validation pending. Back up before manual testing.'
           fi

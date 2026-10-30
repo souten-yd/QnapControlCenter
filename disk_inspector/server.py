@@ -132,7 +132,7 @@ def handler_factory(state):
                 self.headers.get("X-QCC-Update-Intent", ""),
                 self.headers.get("Content-Type", ""), expected_port=port,
             )
-            # Keep the original explicit token path for older clients.
+            # Legacy token path stays for backward-compatible clients; LAN Web UI never needs one.
             token_allowed = (
                 self.path == "/api/install-update" and
                 bool(host) and origin in ("http://" + host, "https://" + host) and
