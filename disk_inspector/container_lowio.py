@@ -68,7 +68,8 @@ def read_fixed(path):
 
 
 def patch_docker(text):
-    if text.count("exec dockerd $DOCKER_OPTS") != 1:
+    if (len(re.findall(r"(?m)^exec dockerd \$DOCKER_OPTS[ \t]*$", text)) != 1
+            or len(re.findall(r"\bexec[ \t]+dockerd\b", text)) != 1):
         raise Incompatible("Docker launch line is not recognized")
     live = re.findall(r"(?m)^" + re.escape(DOCKER_ON) + r"[ \t]*$", text)
     off = re.findall(r"(?m)^" + re.escape(DOCKER_OFF) + r"[ \t]*$", text)
@@ -101,8 +102,8 @@ def patch_supervisor(text):
         point += 2
         eol = "\r\n"
     elif text.startswith("\n", point):
+        eol = "\r\n" if point > 0 and text[point-1] == "\r" else "\n"
         point += 1
-        eol = "\n"
     else:
         # A CR may have been matched by the regex above; handle it explicitly.
         if point and text[point-1:point] == "\r" and text.startswith("\n", point):
