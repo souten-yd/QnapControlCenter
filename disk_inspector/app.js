@@ -253,3 +253,95 @@ $('open-write-log').addEventListener('click', () => {
   section.scrollIntoView({behavior:'smooth',block:'start'});
   refreshWriteLog();
 });
+
+
+// Explicit, LAN-only fixed Container Station quiet-log maintenance.
+// Never send sudo passwords, file paths, shell commands, or user-defined flags.
+let lowioLatest = null;
+async function lowioRefresh() {
+  const state = $('lowio-status');
+  const apply = $('lowio-apply');
+  const restart = $('lowio-restart');
+  apply.disabled = true;
+  restart.disabled = true;
+  try {
+    const response = await fetch('/api/container-lowio', {cache: 'no-store'});
+    if (!response.ok) throw Error('HTTP ' + response.status);
+    const data = await response.json();
+    lowioLatest = data;
+    state.textContent = ({
+      needs_apply: 'Container Station更新でログ抑制設定が戻っています。',
+      restart_required: '設定変更済み・Container Station再起動待ち。',
+      applied: 'ログ抑制の設定ファイルは適用済みです。',
+      unsupported: 'このContainer Station構成は安全な自動修正の対象外です。'
+    })[data.state] || data.state;
+    const runtime = data.runtime || {};
+    const d = runtime['docker.json'] || {};
+    const sd = runtime['system-docker.json'] || {};
+    $('lowio-details').textContent =
+      '通常Docker: ' + (d.running ? (d.debug ? 'DEBUG有効' : 'DEBUG無効') : '稼働未検出') +
+      ' · system-docker: ' + (sd.running ? (sd.debug ? 'DEBUG有効' : 'DEBUG無効') : '稼働未検出') +
+      ' · ' + (data.message || '') +
+      ' · 再起動操作: ' + (data.restart_available ? 'Web利用可' : 'QTS App Centerを使用');
+    apply.disabled = !(data.lan_available && data.writable && data.needs_apply);
+    const busy = data.restart_status && data.restart_status.state === 'running';
+    restart.disabled = !(data.lan_available && data.restart_available &&
+                         !data.needs_apply && data.state !== 'unsupported' && !busy);
+    if (busy) $('lowio-result').textContent = data.restart_status.message || '再起動中';
+    if (data.restart_status && ['complete','error'].includes(data.restart_status.state)) {
+      $('lowio-result').textContent = '再起動結果: ' + data.restart_status.message;
+    }
+  } catch (error) {
+    lowioLatest = null;
+    state.textContent = '設定取得失敗: ' + error.message;
+    $('lowio-details').textContent = '';
+  }
+}
+async function lowioPost(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-QCC-Lowio-Intent': '1'},
+    body: JSON.stringify(body)
+  });
+  let result = {};
+  try { result = await response.json(); } catch (_) {}
+  if (!response.ok) throw Error(result.error || 'HTTP ' + response.status);
+  return result;
+}
+$('lowio-check').addEventListener('click', lowioRefresh);
+$('lowio-apply').addEventListener('click', async () => {
+  if (!lowioLatest || !lowioLatest.needs_apply) return;
+  if (!confirm('Container StationのDocker DEBUGログとSupervisor INFOログを抑制します。2ファイルをバックアップし、修正します。コンテナは再起動しません。続行しますか？')) return;
+  $('lowio-apply').disabled = true;
+  $('lowio-result').textContent = '設定の整合性を検証しています…';
+  try {
+    const p = await lowioPost('/api/container-lowio/prepare', {});
+    const v = await lowioPost('/api/container-lowio/apply', {
+      fingerprint: p.fingerprint, nonce: p.nonce
+    });
+    $('lowio-result').textContent = '適用完了。バックアップ: ' + (v.backup || '変更なし') +
+      '。反映にはContainer Station再起動が必要です。';
+  } catch (error) {
+    $('lowio-result').textContent = '適用失敗（対象を確認してください）: ' + error.message;
+  } finally {
+    await lowioRefresh();
+  }
+});
+$('lowio-restart').addEventListener('click', async () => {
+  if (!lowioLatest || lowioLatest.needs_apply || !lowioLatest.restart_available) return;
+  if (!confirm('Container Stationを再起動します。実行中の全コンテナが停止・再起動する可能性があります。重要な処理とデータ保存を確認しましたか？')) return;
+  if (!confirm('最終確認: Container Stationを今すぐ再起動しますか？')) return;
+  $('lowio-restart').disabled = true;
+  $('lowio-result').textContent = '再起動の準備中…';
+  try {
+    const prepared = await lowioPost('/api/container-lowio/prepare-restart', {});
+    const result = await lowioPost('/api/container-lowio/restart', {nonce: prepared.nonce});
+    $('lowio-result').textContent = result.message || '再起動を要求しました';
+  } catch (error) {
+    $('lowio-result').textContent = '再起動要求失敗: ' + error.message;
+  } finally {
+    await lowioRefresh();
+  }
+});
+// No recurring disk reads or writes: inspect only when the user opens this feature.
+lowioRefresh();
