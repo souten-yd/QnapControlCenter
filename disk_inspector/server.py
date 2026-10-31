@@ -2,6 +2,7 @@
 import argparse
 import os
 import json
+import subprocess
 import threading
 import time
 from collections import deque
@@ -10,7 +11,7 @@ from pathlib import Path
 from .monitor import Sampler
 from .write_log import RollingWriteLog
 from .update import check_latest
-from . import installer, lan_update
+from . import installer, lan_update, container_lowio
 
 UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
@@ -50,6 +51,7 @@ class State:
         self.write_log = RollingWriteLog()
         self.latest = dict(status="warming_up", disks=[], processes=[])
         self.confirmations = lan_update.OneUseConfirmations()
+        self.lowio_confirms = lan_update.OneUseConfirmations()
 
     def collect(self, interval):
         sampler = Sampler()
@@ -66,6 +68,16 @@ class State:
                 self.latest = public_sample
                 self.samples.append(public_sample)
             time.sleep(interval)
+
+def local_admin_connection(peer, local, host, port):
+    """Additional confinement: only an actual NAS loopback socket."""
+    from ipaddress import ip_address
+    try:
+        return (ip_address(peer).is_loopback and ip_address(local).is_loopback
+                and lan_update.allowed_peer(peer, local, host, expected_port=port))
+    except ValueError:
+        return False
+
 
 def handler_factory(state):
     class Handler(BaseHTTPRequestHandler):
@@ -102,6 +114,14 @@ def handler_factory(state):
                 with state.lock:
                     data = state.write_log.snapshot()
                 payload, mime = json.dumps(data).encode(), "application/json"
+            elif self.path == "/api/container-lowio":
+                local, port = self.connection.getsockname()[:2]
+                data = container_lowio.inspect()
+                data["lan_available"] = lan_update.allowed_peer(
+                    self.client_address[0], local, self.headers.get("Host", ""),
+                    expected_port=port)
+                data["restart_status"] = container_lowio.restart_status()
+                payload, mime = json.dumps(data).encode(), "application/json"
             elif self.path == "/api/update":
                 try:
                     update = check_latest()
@@ -121,6 +141,12 @@ def handler_factory(state):
             self.end_headers()
             self.wfile.write(payload)
         def do_POST(self):
+            if self.path in ("/api/container-lowio/prepare",
+                             "/api/container-lowio/apply",
+                             "/api/container-lowio/prepare-restart",
+                             "/api/container-lowio/restart"):
+                self._post_container_lowio()
+                return
             if self.path not in ("/api/prepare-update", "/api/install-update"):
                 self.send_error(404)
                 return
@@ -194,6 +220,85 @@ def handler_factory(state):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(payload)
+        def _post_container_lowio(self):
+            # Same trusted-LAN model as the existing official updater.
+            # This is NOT QTS administrator identity verification.
+            peer = self.client_address[0]
+            local, port = self.connection.getsockname()[:2]
+            host = self.headers.get("Host", "")
+            if not lan_update.authorized_post(
+                    peer, local, host, self.headers.get("Origin", ""),
+                    self.headers.get("Sec-Fetch-Site", ""),
+                    self.headers.get("X-QCC-Lowio-Intent", ""),
+                    self.headers.get("Content-Type", ""), expected_port=port):
+                self.send_error(403)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 2 or length > 512:
+                    self.send_error(413)
+                    return
+                args = json.loads(self.rfile.read(length))
+                if not isinstance(args, dict):
+                    self.send_error(400)
+                    return
+                if self.path == "/api/container-lowio/prepare":
+                    if args:
+                        self.send_error(400)
+                        return
+                    current = container_lowio.inspect()
+                    if (not current.get("writable") or
+                            not current.get("needs_apply")):
+                        raise RuntimeError(current.get("message", "Patch unavailable"))
+                    fingerprint = current["fingerprint"]
+                    nonce = state.lowio_confirms.issue(peer, fingerprint)
+                    output = {"fingerprint": fingerprint, "nonce": nonce,
+                              "changes": current["changes"], "expires_in": 60}
+                    code = 200
+                elif self.path == "/api/container-lowio/apply":
+                    if set(args) != {"fingerprint", "nonce"}:
+                        self.send_error(400)
+                        return
+                    fingerprint = args["fingerprint"]
+                    if (not isinstance(fingerprint, str) or
+                            not state.lowio_confirms.consume(
+                                peer, fingerprint, args["nonce"])):
+                        self.send_error(403)
+                        return
+                    output = container_lowio.apply(fingerprint)
+                    code = 200
+                elif self.path == "/api/container-lowio/prepare-restart":
+                    if args:
+                        self.send_error(400)
+                        return
+                    current = container_lowio.inspect()
+                    if (not current.get("restart_available")
+                            or current.get("state") == "unsupported"
+                            or current.get("needs_apply")):
+                        raise RuntimeError("Container Station restart is unavailable")
+                    nonce = state.lowio_confirms.issue(peer, "container-station-restart")
+                    output = {"nonce": nonce, "expires_in": 60}
+                    code = 200
+                else:
+                    if (set(args) != {"nonce"} or not state.lowio_confirms.consume(
+                            peer, "container-station-restart", args["nonce"])):
+                        self.send_error(403)
+                        return
+                    output = container_lowio.request_restart()
+                    code = 202
+                self._lowio_json(code, output)
+            except (OSError, ValueError, KeyError, RuntimeError,
+                    PermissionError, subprocess.SubprocessError) as exc:
+                self._lowio_json(409, {"error": str(exc)[:200]})
+
+        def _lowio_json(self, status_code, result):
+            payload = json.dumps(result).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(payload)
     return Handler
 
 def main():

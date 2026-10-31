@@ -20,8 +20,8 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_version_matches_manifest(self):
         info = build_info(ROOT / "packaging/qpkg.cfg",
                           "a" * 40)
-        self.assertEqual(info["version"], "0.1.15")
-        self.assertEqual(info["build_id"], "0.1.15+aaaaaaaaaaaa")
+        self.assertEqual(info["version"], "0.1.16")
+        self.assertEqual(info["build_id"], "0.1.16+aaaaaaaaaaaa")
         self.assertIn("write_diagnostics", info["features"])
         self.assertEqual(build_info(ROOT / "packaging/qpkg.cfg")["commit"], "local")
 

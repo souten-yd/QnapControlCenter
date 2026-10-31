@@ -27,6 +27,7 @@ def verify_qpkg(path):
             "disk_inspector/write_report.js",
             "disk_inspector/server.py",
             "disk_inspector/write_log.py",
+            "disk_inspector/container_lowio.py",
             "disk_inspector/build_info.json",
             "QnapControlCenter.sh",
         )
@@ -56,6 +57,14 @@ def verify_qpkg(path):
                 "report_schema: 'qcc-write-diagnostics-v1'" not in report_js or
                 "/write_report.js" not in server):
             raise ValueError("QPKG AI diagnostic text export UI/JS/API contract missing")
+        if ('id="container-lowio"' not in html or
+                'id="lowio-apply"' not in html or
+                'id="lowio-restart"' not in html or
+                '/api/container-lowio/prepare' not in js or
+                '/api/container-lowio/apply' not in js or
+                '/api/container-lowio' not in server or
+                'def apply(' not in load("disk_inspector/container_lowio.py").decode("utf-8")):
+            raise ValueError("Container Station low-I/O UI/API/payload contract missing")
         expected = re.search(r"QnapControlCenter_([0-9]+(?:[.][0-9]+){2})_", path.name)
         if not expected or info.get("version") != expected[1]:
             raise ValueError("QPKG filename and bundled runtime version differ")
