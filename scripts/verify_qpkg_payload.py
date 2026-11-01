@@ -29,6 +29,8 @@ def verify_qpkg(path):
             "disk_inspector/installer.py",
             "disk_inspector/update.py",
             "disk_inspector/write_log.py",
+            "disk_inspector/read_log.py",
+            "disk_inspector/read_report.js",
             "disk_inspector/container_lowio.py",
             "disk_inspector/build_info.json",
             "QnapControlCenter.sh",
@@ -42,6 +44,8 @@ def verify_qpkg(path):
         js = load("disk_inspector/app.js").decode("utf-8")
         report_js = load("disk_inspector/write_report.js").decode("utf-8")
         server = load("disk_inspector/server.py").decode("utf-8")
+        read_report_js = load("disk_inspector/read_report.js").decode("utf-8")
+        read_log = load("disk_inspector/read_log.py").decode("utf-8")
         info = json.loads(load("disk_inspector/build_info.json"))
         if ('update-token' in html or 'manual-token' in html):
             raise ValueError("QPKG must not ask LAN users for an admin token")
@@ -77,6 +81,21 @@ def verify_qpkg(path):
                 '/api/update-log' not in server or
                 'wait_for_version(' not in load("disk_inspector/installer.py").decode("utf-8")):
             raise ValueError("QPKG detached updater UI/status/verification missing")
+        if ('href="#read-log"' not in html or
+                'id="open-read-log"' not in html or
+                'id="download-read-report"' not in html or
+                'id="reset-read-log"' not in html or
+                'src="/read_report.js"' not in html or
+                '/api/read-log/reset' not in js or
+                '/api/read-log' not in server or
+                '/read_report.js' not in server or
+                'RollingReadLog' not in server or
+                'read_bytes_delta' not in load("disk_inspector/monitor.py").decode("utf-8") or
+                'read_ops_delta' not in load("disk_inspector/monitor.py").decode("utf-8") or
+                'def reset(self)' not in read_log or
+                'qcc-read-diagnostics-v1' not in read_report_js or
+                'read_diagnostics' not in info.get("features", [])):
+            raise ValueError("QPKG read diagnostic UI/collector/API/report contract missing")
         expected = re.search(r"QnapControlCenter_([0-9]+(?:[.][0-9]+){2})_", path.name)
         if not expected or info.get("version") != expected[1]:
             raise ValueError("QPKG filename and bundled runtime version differ")

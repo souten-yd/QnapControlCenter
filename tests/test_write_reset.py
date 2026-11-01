@@ -29,12 +29,12 @@ class ResetEndpointTests(unittest.TestCase):
         self.addCleanup(self.http.shutdown)
         self.base = "http://127.0.0.1:%d" % self.http.server_port
 
-    def post(self, *, origin=None, intent=True):
+    def post(self, *, origin=None, intent=True, mode="write"):
         headers = {"Content-Type": "application/json",
                    "Origin": origin or self.base}
         if intent:
-            headers["X-QCC-Write-Intent"] = "1"
-        request = Request(self.base + "/api/write-log/reset", data=b"{}",
+            headers["X-QCC-" + mode.capitalize() + "-Intent"] = "1"
+        request = Request(self.base + "/api/" + mode + "-log/reset", data=b"{}",
                           headers=headers, method="POST")
         try:
             with urlopen(request, timeout=4) as response:
@@ -61,6 +61,26 @@ class ResetEndpointTests(unittest.TestCase):
         self.assertEqual(self.post(intent=False)[0], 403)
         self.assertEqual(self.state.write_log.snapshot()["sample_count"], 1)
 
+
+    def test_read_reset_is_independent_from_write_and_requires_guard(self):
+        self.state.write_log.record(sample(1000))
+        read_sample = dict(sample(1000),
+            disks=[{"device": "sda", "read_bytes_delta": 8192, "read_ops_delta": 4}],
+            read_events=[{"pid": 100, "starttime": 1, "name": "reader",
+                          "read_bytes": 2048}],
+            process_read_bytes=2048, omitted_process_read_bytes=0,
+            monitor_read_bytes=0)
+        self.state.read_log.record(read_sample)
+        self.assertEqual(self.post(mode="read", origin="https://evil.example")[0], 403)
+        self.assertEqual(self.post(mode="read", intent=False)[0], 403)
+        self.assertEqual(self.state.read_log.snapshot()["sample_count"], 1)
+        self.assertEqual(self.post(mode="read")[0], 200)
+        self.assertEqual(self.state.read_log.snapshot()["sample_count"], 0)
+        self.assertEqual(self.state.write_log.snapshot()["sample_count"], 1)
+        self.state.read_log.record(read_sample)
+        self.assertEqual(self.state.read_log.snapshot()["disk_read_ops"], 4)
+        self.assertEqual(self.post(mode="write")[0], 200)
+        self.assertEqual(self.state.read_log.snapshot()["sample_count"], 1)
 
 if __name__ == "__main__":
     unittest.main()

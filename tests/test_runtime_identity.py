@@ -20,9 +20,10 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_version_matches_manifest(self):
         info = build_info(ROOT / "packaging/qpkg.cfg",
                           "a" * 40)
-        self.assertEqual(info["version"], "0.1.17")
-        self.assertEqual(info["build_id"], "0.1.17+aaaaaaaaaaaa")
+        self.assertEqual(info["version"], "0.1.18")
+        self.assertEqual(info["build_id"], "0.1.18+aaaaaaaaaaaa")
         self.assertIn("write_diagnostics", info["features"])
+        self.assertIn("read_diagnostics", info["features"])
         self.assertEqual(build_info(ROOT / "packaging/qpkg.cfg")["commit"], "local")
 
     def test_bad_manifest_fails_closed(self):
@@ -48,11 +49,17 @@ class RuntimeIdentityTests(unittest.TestCase):
             self.assertEqual(response.headers.get("Cache-Control"),
                              "no-store, max-age=0, must-revalidate")
         self.assertEqual(runtime["features"]["write_diagnostics"], True)
+        self.assertEqual(runtime["features"]["read_diagnostics"], True)
+        self.assertEqual(runtime["read_diagnostics_endpoint"], "/api/read-log")
         self.assertIn("running_version", runtime)
         self.assertIn("build_id", runtime)
         self.assertEqual(runtime["diagnostics_endpoint"], "/api/write-log")
         with urlopen(base + "/api/write-log", timeout=4) as response:
             log = json.load(response)
+        with urlopen(base + "/api/read-log", timeout=4) as response:
+            read = json.load(response)
+        self.assertEqual(read["window_seconds"], 300)
+        self.assertEqual(read["sample_count"], 0)
         self.assertEqual(log["window_seconds"], 300)
         self.assertEqual(log["sample_count"], 0)
 
@@ -65,6 +72,13 @@ class RuntimeIdentityTests(unittest.TestCase):
         self.assertIn('id="open-write-log"', html)
         self.assertIn('id="download-write-report"', html)
         self.assertIn('id="reset-write-log"', html)
+        self.assertIn('href="#read-log"', html)
+        self.assertIn('id="read-log"', html)
+        self.assertIn('id="open-read-log"', html)
+        self.assertIn('id="reset-read-log"', html)
+        self.assertIn('id="download-read-report"', html)
+        self.assertIn('src="/read_report.js"', html)
+        self.assertIn('QCCReadReport.format', js)
         self.assertIn('/api/write-log/reset', js)
         self.assertIn('/api/write-log/reset', (ROOT / "disk_inspector/server.py").read_text())
         self.assertIn('src="/write_report.js"', html)
