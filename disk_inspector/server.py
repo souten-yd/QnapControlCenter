@@ -1,4 +1,4 @@
-"""Lightweight read-only dashboard. localhost-only by default."""
+"""Low-I/O diagnostics with explicit LAN-guarded QTS maintenance actions."""
 import argparse
 import os
 import json
@@ -52,7 +52,6 @@ class State:
         self.latest = dict(status="warming_up", disks=[], processes=[])
         self.confirmations = lan_update.OneUseConfirmations()
         self.lowio_confirms = lan_update.OneUseConfirmations()
-        self.reset_confirmations = lan_update.OneUseConfirmations()
 
     def collect(self, interval):
         sampler = Sampler()
