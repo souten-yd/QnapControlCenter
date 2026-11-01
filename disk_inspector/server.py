@@ -10,12 +10,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .monitor import Sampler
 from .write_log import RollingWriteLog
+from .read_log import RollingReadLog
 from .update import check_latest
 from . import installer, lan_update, container_lowio
 
 UI = Path(__file__).with_name("index.html").read_bytes()
 JS = Path(__file__).with_name("app.js").read_bytes()
 REPORT_JS = Path(__file__).with_name("write_report.js").read_bytes()
+READ_REPORT_JS = Path(__file__).with_name("read_report.js").read_bytes()
 CSS = Path(__file__).with_name("style.css").read_bytes()
 ICON = Path(__file__).with_name("apple-touch-icon.png").read_bytes()
 
@@ -28,7 +30,7 @@ def read_build_info():
     except (OSError, ValueError, TypeError):
         pass
     return {"version": "development", "build_id": "development", "commit": "local",
-            "features": ["write_diagnostics", "lan_updater"]}
+            "features": ["write_diagnostics", "read_diagnostics", "lan_updater"]}
 
 BUILD_INFO = read_build_info()
 RUNTIME_STARTED_AT = int(time.time())
@@ -40,7 +42,8 @@ def runtime_info():
         "commit": BUILD_INFO.get("commit", "local"),
         "started_at": RUNTIME_STARTED_AT,
         "pid": os.getpid(),
-        "features": {"write_diagnostics": True, "lan_updater": True},
+        "features": {"write_diagnostics": True, "read_diagnostics": True, "lan_updater": True},
+        "read_diagnostics_endpoint": "/api/read-log",
         "diagnostics_endpoint": "/api/write-log",
     }
 
@@ -49,6 +52,7 @@ class State:
         self.lock = threading.Lock()
         self.samples = deque(maxlen=60)
         self.write_log = RollingWriteLog()
+        self.read_log = RollingReadLog()
         self.latest = dict(status="warming_up", disks=[], processes=[])
         self.confirmations = lan_update.OneUseConfirmations()
         self.lowio_confirms = lan_update.OneUseConfirmations()
@@ -60,11 +64,13 @@ class State:
                 sample = sampler.sample()
             except (OSError, ValueError) as exc:
                 sample = dict(status="error", error=type(exc).__name__, disks=[], processes=[])
-            # Write events are transient and never stored in the regular status ring.
+            # Read and write events are transient, sharing the one /proc scan.
             with self.lock:
                 self.write_log.record(sample)
+                self.read_log.record(sample)
                 public_sample = dict(sample)
                 public_sample.pop("write_events", None)
+                public_sample.pop("read_events", None)
                 self.latest = public_sample
                 self.samples.append(public_sample)
             time.sleep(interval)
@@ -96,6 +102,8 @@ def handler_factory(state):
                 payload, mime = JS, "text/javascript; charset=utf-8"
             elif self.path == "/write_report.js":
                 payload, mime = REPORT_JS, "text/javascript; charset=utf-8"
+            elif self.path == "/read_report.js":
+                payload, mime = READ_REPORT_JS, "text/javascript; charset=utf-8"
             elif self.path == "/api/runtime":
                 payload, mime = json.dumps(runtime_info()).encode(), "application/json"
             elif self.path == "/api/update-status":
@@ -114,6 +122,10 @@ def handler_factory(state):
             elif self.path == "/api/write-log":
                 with state.lock:
                     data = state.write_log.snapshot()
+                payload, mime = json.dumps(data).encode(), "application/json"
+            elif self.path == "/api/read-log":
+                with state.lock:
+                    data = state.read_log.snapshot()
                 payload, mime = json.dumps(data).encode(), "application/json"
             elif self.path == "/api/container-lowio":
                 local, port = self.connection.getsockname()[:2]
@@ -150,8 +162,8 @@ def handler_factory(state):
             self.end_headers()
             self.wfile.write(payload)
         def do_POST(self):
-            if self.path == "/api/write-log/reset":
-                self._post_write_reset()
+            if self.path in ("/api/write-log/reset", "/api/read-log/reset"):
+                self._post_diagnostic_reset()
                 return
             if self.path in ("/api/container-lowio/prepare",
                              "/api/container-lowio/apply",
@@ -234,14 +246,16 @@ def handler_factory(state):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(payload)
-        def _post_write_reset(self):
+        def _post_diagnostic_reset(self):
             peer = self.client_address[0]
             local, port = self.connection.getsockname()[:2]
             host = self.headers.get("Host", "")
+            intent = ("X-QCC-Read-Intent" if self.path == "/api/read-log/reset"
+                      else "X-QCC-Write-Intent")
             if not lan_update.authorized_post(
                     peer, local, host, self.headers.get("Origin", ""),
                     self.headers.get("Sec-Fetch-Site", ""),
-                    self.headers.get("X-QCC-Write-Intent", ""),
+                    self.headers.get(intent, ""),
                     self.headers.get("Content-Type", ""), expected_port=port):
                 self.send_error(403)
                 return
@@ -256,8 +270,10 @@ def handler_factory(state):
             # The live sampler continues uninterrupted. Only the RAM history
             # and process/path hints are cleared atomically against collection.
             with state.lock:
-                state.write_log.reset()
-                result = state.write_log.snapshot()
+                diagnostic = (state.read_log if self.path == "/api/read-log/reset"
+                              else state.write_log)
+                diagnostic.reset()
+                result = diagnostic.snapshot()
             self._lowio_json(200, {"reset": True, "sample_count": result["sample_count"]})
 
         def _post_container_lowio(self):
