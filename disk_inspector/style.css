@@ -27,3 +27,11 @@ input[type=password]{background:#0e1b31;border:1px solid #42577a;color:#fff;padd
 #update-log-panel{margin-top:12px}
 #update-log-panel summary{cursor:pointer;color:#86cfff;margin-bottom:10px}
 #reset-write-log{background:#475569}
+
+/* Separate read diagnostics use the same bounded mobile-friendly tables. */
+#read-log{scroll-margin-top:16px}
+#read-procs pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:430px;font:12px ui-monospace,monospace}
+#read-procs summary{cursor:pointer;color:#86cfff}
+.read-bar{background:#6ba5f8}
+#read-timeline .write-interval{grid-template-columns:85px minmax(0,1fr) minmax(105px,auto)}
+@media(max-width:700px){#read-timeline .write-interval{grid-template-columns:68px minmax(0,1fr) minmax(105px,auto)}}
