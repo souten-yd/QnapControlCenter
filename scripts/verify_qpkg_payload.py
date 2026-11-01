@@ -26,6 +26,8 @@ def verify_qpkg(path):
             "disk_inspector/app.js",
             "disk_inspector/write_report.js",
             "disk_inspector/server.py",
+            "disk_inspector/installer.py",
+            "disk_inspector/update.py",
             "disk_inspector/write_log.py",
             "disk_inspector/container_lowio.py",
             "disk_inspector/build_info.json",
@@ -65,6 +67,16 @@ def verify_qpkg(path):
                 '/api/container-lowio' not in server or
                 'def apply(' not in load("disk_inspector/container_lowio.py").decode("utf-8")):
             raise ValueError("Container Station low-I/O UI/API/payload contract missing")
+        if ('id="reset-write-log"' not in html or
+                '/api/write-log/reset' not in js or
+                '/api/write-log/reset' not in server or
+                'def reset(self)' not in load("disk_inspector/write_log.py").decode("utf-8")):
+            raise ValueError("QPKG write reset control/API/implementation missing")
+        if ('id="update-log-panel"' not in html or
+                '/api/update-log' not in js or
+                '/api/update-log' not in server or
+                'wait_for_version(' not in load("disk_inspector/installer.py").decode("utf-8")):
+            raise ValueError("QPKG detached updater UI/status/verification missing")
         expected = re.search(r"QnapControlCenter_([0-9]+(?:[.][0-9]+){2})_", path.name)
         if not expected or info.get("version") != expected[1]:
             raise ValueError("QPKG filename and bundled runtime version differ")
