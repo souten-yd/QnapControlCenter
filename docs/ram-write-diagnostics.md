@@ -30,7 +30,7 @@ The read-only `GET /api/write-log` response may contain real absolute paths unde
 - Oldest samples and hints are evicted when older than 300 seconds, even under high sample frequency.
 - 5-minute top writers, cumulative physical disk writes, process totals and candidate paths display in the Japanese UI.
 - Server's own disk write counter and sampling wall time are displayed for overhead monitoring.
-- Read-only endpoint, no new POST or execution behavior, existing update authentication untouched.
+- Read-only GET endpoint for data. Since v0.1.17, a separate explicitly confirmed, private-LAN-only POST clears just the RAM window; it does not execute code or alter QTS settings.
 
 ## Web entry point and runtime verification
 
@@ -54,3 +54,9 @@ The report contains:
 **Privacy:** This text may contain usernames, directory names, executable paths and file names; inspect/redact it before sharing with an external AI service. The file is saved only to the browser's chosen download destination. Browser downloads on the NAS itself or to NAS-backed shares can write there indirectly; use a separate local client when minimizing NAS writes.
 
 The format tests run with Node.js during CI and inspect output with Unicode paths, process attribution, source JSON completeness, and no input mutation. The final CI-assembled QPKG is inspected for the button, new JS module and HTTP route.
+
+## Explicit RAM window reset (v0.1.17-rc19)
+
+The **5分間の診断をリセット** button clears the in-memory rolling sample deque, file-descriptor candidate paths and FD probe timestamp. It does NOT reset kernel /proc counters, interrupt the existing 5-second sampler, delete a NAS file, or restart services. A confirmation prompt is required. The next normal sample starts the new diagnostic window, and export correctly refuses an empty window until a valid sample arrives.
+
+POST /api/write-log/reset accepts exactly an empty JSON object with private-LAN same-origin protection and X-QCC-Write-Intent. The operation holds the existing State lock, so a concurrent collector cannot interleave its sample with clearing the window. The UI reports success/failure; no on-disk audit file is created. The HTTP server still does not log routine requests to disk.

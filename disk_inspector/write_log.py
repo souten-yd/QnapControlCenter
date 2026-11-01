@@ -87,6 +87,12 @@ class RollingWriteLog:
         self.candidates = {}
         self.last_probe = None
 
+    def reset(self):
+        """Discard only the in-memory diagnostic window; keep sampler running."""
+        self.samples.clear()
+        self.candidates.clear()
+        self.last_probe = None
+
     def record(self, sample):
         if sample.get("status") != "ok":
             self._expire(self.clock())

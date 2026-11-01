@@ -13,23 +13,21 @@ Open http://127.0.0.1:8778. The QPKG service is configured for trusted LAN/Tails
 
 See `docs/disk-inspector-design.md`, `docs/installation.md`, and `docs/development-release-process.md`.
 
-**Web updates:** Explicit token-protected install plus opt-in, source-IP allowlisted LAN install. **Release status:** v0.1.11-rc13 is a CI-built candidate only; no device-tested production QPKG.
+**Web updates:** Explicit LAN-only, same-origin, one-use-confirmation official QPKG installation; the detached worker verifies the installed QTS version and running Web service. **Release status:** v0.1.17-rc19 is a CI candidate; actual NAS upgrade validation is pending.
 
 New installs request QTS-managed auto-start; upgrades preserve QTS's existing enabled/disabled state. Startup has a bounded wait for late-mounted storage/Python. See [reboot checks](docs/installation.md#nas-reboot-auto-start-check).
 
 The iPhone Home Screen and QTS App Center icons are generated from `assets/qcc-icon.svg` during QPKG build (Python CairoSVG and Pillow).
 
-## LAN Web updates (v0.1.9-rc11 candidate)
+## LAN Web updates (v0.1.17-rc19)
 
-The dashboard can update QnapControlCenter **without typing a management token** from an explicitly allowlisted LAN client. For safety, LAN updates are disabled by default, and are not enabled simply because the IP is private. Admin-approved setup is one-time via the NAS's QTS configuration; see [LAN update configuration](docs/lan-update.md). When active, the token field disappears on the authorized client's dashboard and an explicit confirmation is still required.
-
-Existing token-based Web updates are preserved for non-allowlisted clients. LAN updates require a numeric NAS LAN address and same-origin requests. They do not authenticate individual QTS users, so only allow devices you fully trust. No Internet/guest-Wi-Fi access; no automatic installation. Real-device QTS upgrade and rollback remain unverified.
+On a trusted LAN or Tailscale connection to http://NAS-IP:8778/, use 最新版を確認 → 更新をインストール → confirmation. No setup, manual token or IP allowlist is required, but **this does not authenticate QTS user identities**. The target must be an official published QPKG with SHA-256 verification. The updater runs independently from the replaced Web process, then checks both the QTS package version and new Web /api/runtime before reporting success. The page displays progress and a bounded update log. Never expose TCP 8778 to public or guest networks. See [Web updater](docs/web-updater.md).
 
 ## Rolling 5-minute disk write diagnostics
 
 The **書込診断** tab continuously samples existing disk/procfs counters every 5 seconds and holds only the latest **300 seconds in RAM**. The same existing /proc/PID/io scan feeds process totals, without a duplicate process-wide scan. Every 30 seconds the collector examines write-capable /proc/PID/fdinfo descriptors for at most the top 6 writing processes, checking no more than 48 descriptors per process. This adds no normal filesystem content reads or log writes.
 
-The UI reports disk counters, process counters, approximate QPKG owner hints, executable/current directory, write-capable *open-file candidates*, and its own process physical write_bytes delta. Paths are **not confirmed per-file write events** and cannot support exact per-file byte counts without more invasive tracing. RAID, snapshots, journal, permission restrictions and short-lived descriptors can create unattributed writes. See [RAM write diagnostics](docs/ram-write-diagnostics.md) for limitations, memory bounds and security.
+The UI reports disk counters, process counters, approximate QPKG owner hints, executable/current directory, write-capable *open-file candidates*, and its own process physical write_bytes delta. The **5分間の診断をリセット** button clears only RAM history and starts a new measurement window; it never deletes files or resets kernel counters. Paths are **not confirmed per-file write events** and cannot support exact per-file byte counts without more invasive tracing. RAID, snapshots, journal, permission restrictions and short-lived descriptors can create unattributed writes. See [RAM write diagnostics](docs/ram-write-diagnostics.md) for limitations, memory bounds and security.
 
 ## Diagnosing a missing Write Diagnostics control
 
@@ -53,7 +51,7 @@ For immediate recovery of 0.1.12, use a one-time verified SIGTERM to the confirm
 
 ## Zero-setup LAN Web updating (v0.1.14-rc16)
 
-Open `http://NAS-IP:8778/` on a trusted private LAN, click 最新版を確認 then 更新をインストール and confirm. No IP allowlist configuration or manual token is required. The Web UI uses a short-lived automatic confirmation and retains same-origin checks; only the official checksum-verified QPKG can be applied. QTS `qpkg_cli` must exist. Anyone on that LAN can request an update, so do not expose port 8778 to guest/public networks. See [LAN update details](docs/lan-update.md).
+Open `http://NAS-IP:8778/` on a trusted private LAN, click 最新版を確認 then 更新をインストール and confirm. No IP allowlist configuration or manual token is required. The Web UI uses a short-lived automatic confirmation and retains same-origin checks; only the official checksum-verified QPKG can be applied. A QTS-installed, enabled QPKG with administrator privileges and RAM staging is required. The worker invokes the verified QDK shell QPKG, as QnapSelfCare does. Anyone on that LAN can request an update, so do not expose port 8778 to guest/public networks. See [LAN update details](docs/lan-update.md).
 
 ## AI-ready 300-second RAM write report (v0.1.15-rc17)
 

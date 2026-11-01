@@ -21,3 +21,9 @@ input[type=password]{background:#0e1b31;border:1px solid #42577a;color:#fff;padd
 .write-export-action { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0.6rem 1rem; margin:0.6rem 0 1rem; }
 .write-export-action button { max-width:100%; white-space:normal; }
 .write-export-action small { flex:1 1 17rem; color:var(--muted, #9aa6ba); overflow-wrap:anywhere; }
+
+/* Keep update logs readable on narrow mobile screens. */
+#update-log{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow-y:auto;background:#0e1b31;padding:12px;border-radius:8px;font:12px ui-monospace,monospace}
+#update-log-panel{margin-top:12px}
+#update-log-panel summary{cursor:pointer;color:#86cfff;margin-bottom:10px}
+#reset-write-log{background:#475569}

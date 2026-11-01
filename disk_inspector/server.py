@@ -1,4 +1,4 @@
-"""Lightweight read-only dashboard. localhost-only by default."""
+"""Low-I/O diagnostics with explicit LAN-guarded QTS maintenance actions."""
 import argparse
 import os
 import json
@@ -105,6 +105,7 @@ def handler_factory(state):
                     self.client_address[0], local, self.headers.get("Host", ""), expected_port=port
                 )
                 data["available"] = installer.ready()
+                data["unsupported_reason"] = installer.unavailable_reason()
                 payload,mime=json.dumps(data).encode(),"application/json"
             elif self.path == "/api/status":
                 with state.lock:
@@ -122,6 +123,14 @@ def handler_factory(state):
                     expected_port=port)
                 data["restart_status"] = container_lowio.restart_status()
                 payload, mime = json.dumps(data).encode(), "application/json"
+            elif self.path == "/api/update-log":
+                local, port = self.connection.getsockname()[:2]
+                if not lan_update.allowed_peer(
+                        self.client_address[0], local, self.headers.get("Host", ""),
+                        expected_port=port):
+                    self.send_error(403)
+                    return
+                payload, mime = json.dumps({"log": installer.log_tail()}).encode(), "application/json"
             elif self.path == "/api/update":
                 try:
                     update = check_latest()
@@ -141,6 +150,9 @@ def handler_factory(state):
             self.end_headers()
             self.wfile.write(payload)
         def do_POST(self):
+            if self.path == "/api/write-log/reset":
+                self._post_write_reset()
+                return
             if self.path in ("/api/container-lowio/prepare",
                              "/api/container-lowio/apply",
                              "/api/container-lowio/prepare-restart",
@@ -189,7 +201,9 @@ def handler_factory(state):
                         return
                     # Only a published, server-discovered release can be prepared.
                     release = check_latest()
-                    if release.get("tag") != tag or len(release.get("qpkg", [])) != 1:
+                    if (release.get("tag") != tag or
+                            not release.get("install_supported") or
+                            len(release.get("qpkg", [])) != 1):
                         raise RuntimeError("Release is not the latest published QPKG")
                     if not installer.ready():
                         raise RuntimeError("QTS installer unavailable")
@@ -220,6 +234,32 @@ def handler_factory(state):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(payload)
+        def _post_write_reset(self):
+            peer = self.client_address[0]
+            local, port = self.connection.getsockname()[:2]
+            host = self.headers.get("Host", "")
+            if not lan_update.authorized_post(
+                    peer, local, host, self.headers.get("Origin", ""),
+                    self.headers.get("Sec-Fetch-Site", ""),
+                    self.headers.get("X-QCC-Write-Intent", ""),
+                    self.headers.get("Content-Type", ""), expected_port=port):
+                self.send_error(403)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length != 2 or self.rfile.read(length) != b"{}":
+                    self.send_error(400)
+                    return
+            except ValueError:
+                self.send_error(400)
+                return
+            # The live sampler continues uninterrupted. Only the RAM history
+            # and process/path hints are cleared atomically against collection.
+            with state.lock:
+                state.write_log.reset()
+                result = state.write_log.snapshot()
+            self._lowio_json(200, {"reset": True, "sample_count": result["sample_count"]})
+
         def _post_container_lowio(self):
             # Same trusted-LAN model as the existing official updater.
             # This is NOT QTS administrator identity verification.
