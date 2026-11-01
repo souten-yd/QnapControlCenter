@@ -17,7 +17,7 @@ def build_info(config, commit=""):
         "version": version,
         "commit": sha,
         "build_id": version + "+" + (sha[:12] if sha != "local" else "local"),
-        "features": ["write_diagnostics", "lan_updater"],
+        "features": ["write_diagnostics", "read_diagnostics", "lan_updater"],
     }
 
 def main():
