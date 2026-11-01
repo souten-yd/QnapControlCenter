@@ -116,7 +116,7 @@ class WebEndpointTests(unittest.TestCase):
         self.assertTrue(info["available"])
 
     def test_preparation_and_single_install_without_token(self):
-        release={"tag":"v0.1.14-rc16",
+        release={"tag":"v0.1.14-rc16", "install_supported": True,
                  "qpkg":[{"name":"QnapControlCenter_0.1.14_x86_64.qpkg"}]}
         with patch("disk_inspector.server.installer.authenticate",return_value=False), \
              patch("disk_inspector.server.installer.ready",return_value=True), \
@@ -155,17 +155,10 @@ class WebEndpointTests(unittest.TestCase):
 
 
 class InstallerReadyTests(unittest.TestCase):
-    def test_cli_is_sufficient_without_token_file(self):
-        with patch("disk_inspector.installer.shutil.which",return_value="/usr/bin/qpkg_cli"), \
-             patch("disk_inspector.installer.Path.is_file",return_value=True), \
-             patch.object(installer,"TOKEN_FILE") as token:
-            token.is_file.return_value=False
-            self.assertTrue(installer.ready())
-            token.is_file.assert_not_called()
-
-    def test_no_cli_still_refuses(self):
-        with patch("disk_inspector.installer.shutil.which",return_value=None):
+    def test_root_qpkg_environment_is_required(self):
+        with patch("disk_inspector.installer.os.geteuid", return_value=1000):
             self.assertFalse(installer.ready())
+            self.assertIn("privileges", installer.unavailable_reason())
 
 
 if __name__=="__main__":
