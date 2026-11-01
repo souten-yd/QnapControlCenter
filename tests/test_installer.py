@@ -78,5 +78,41 @@ class InstallerTests(unittest.TestCase):
             installer.version("v0.1.17;rm -rf")
 
 
+    def test_start_copies_worker_outside_replaceable_qpkg(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(installer, "RAM_ROOT", directory), \
+                 patch.object(installer, "LOG_FILE", root/"update.log"), \
+                 patch.object(installer, "STATUS_FILE", root/"status.json"), \
+                 patch.object(installer, "LOCK_FILE", root/"update.lock"), \
+                 patch("disk_inspector.installer.environment", return_value=root/"QnapControlCenter"), \
+                 patch("disk_inspector.installer.getcfg", return_value="0.1.16"), \
+                 patch("disk_inspector.installer.subprocess.Popen") as popen:
+                result = installer.start("v0.1.17-rc19")
+                self.assertEqual(result["state"], "queued")
+                args, kwargs = popen.call_args
+                self.assertEqual(args[0][1], "-B")
+                copied = Path(args[0][2])
+                self.assertEqual(copied.name, "worker.py")
+                self.assertTrue(copied.is_file())
+                self.assertTrue(str(copied).startswith(directory + "/qcc-update-"))
+                self.assertEqual(kwargs["cwd"], str(copied.parent))
+                self.assertTrue(kwargs["start_new_session"])
+                self.assertTrue(kwargs["pass_fds"])
+                self.assertEqual(json.loads((root/"status.json").read_text())["state"], "queued")
+
+    def test_wait_requires_qpkg_and_matching_web_version(self):
+        import io
+        from unittest.mock import Mock
+        opener = Mock()
+        opener.open.return_value.__enter__ = Mock(return_value=io.BytesIO(
+            json.dumps({"running_version": "0.1.17", "pid": 543}).encode()))
+        opener.open.return_value.__exit__ = Mock(return_value=False)
+        def cfg(name):
+            return "0.1.17" if name == "Version" else "TRUE"
+        with patch("disk_inspector.installer.getcfg", side_effect=cfg), \
+             patch("disk_inspector.installer.urllib.request.build_opener", return_value=opener):
+            installer.wait_for_version("v0.1.17-rc19", timeout=1)
+
 if __name__ == "__main__":
     unittest.main()
