@@ -30,7 +30,7 @@ The read-only `GET /api/write-log` response may contain real absolute paths unde
 - Oldest samples and hints are evicted when older than 300 seconds, even under high sample frequency.
 - 5-minute top writers, cumulative physical disk writes, process totals and candidate paths display in the Japanese UI.
 - Server's own disk write counter and sampling wall time are displayed for overhead monitoring.
-- Read-only endpoint, no new POST or execution behavior, existing update authentication untouched.
+- Read-only GET endpoint for data. Since v0.1.17, a separate explicitly confirmed, private-LAN-only POST clears just the RAM window; it does not execute code or alter QTS settings.
 
 ## Web entry point and runtime verification
 
