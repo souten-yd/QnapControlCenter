@@ -54,10 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.16-rc18 >/dev/null 2>&1; then
-            echo 'Release v0.1.16-rc18 already exists; skipping duplicate publication.'
+          if gh release view v0.1.17-rc19 >/dev/null 2>&1; then
+            echo 'Release v0.1.17-rc19 already exists; skipping duplicate publication.'
           else
-            gh release create v0.1.16-rc18 dist/*.qpkg dist/SHA256SUMS \
-              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.16-rc18 (QTS unverified)' \
-              --prerelease --notes 'QTS 5.x x86_64 candidate. Container Station low-I/O Web control: manual narrow patch with verified backup, LAN-only one-use confirmation, separate optional explicitly confirmed QTS restart. No auto-apply; NAS validation pending.'
+            gh release create v0.1.17-rc19 dist/*.qpkg dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title 'QnapControlCenter v0.1.17-rc19 (QTS unverified)' \
+              --prerelease --notes 'QTS 5.x x86_64 candidate. Detached verified self-updater with progress/log and QTS+Web version verification; guarded RAM-only 5-minute write diagnostic reset. Existing low-I/O controls retained. NAS validation pending.'
           fi
