@@ -29,20 +29,51 @@ async function refresh() {
   } catch(e) {$('state').textContent = '監視APIに接続できません: '+e.message;}
 }
 refresh(); setInterval(refresh,5000);
+let selectedRelease = null;
+let releaseInstallable = false;
+let lanEnabled = false;
+let updateBusy = false;
+let updateSubmitting = false;
+let updateUncertain = false;
+
+async function updateJson(path, body) {
+  const response = await fetch(path, {
+    method: body ? 'POST' : 'GET', cache:'no-store',
+    headers: body ? {'Content-Type':'application/json','X-QCC-Update-Intent':'1'} : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let value;
+  try { value = await response.json(); }
+  catch (_) { throw new Error('更新APIがJSONを返しませんでした (HTTP ' + response.status + ')'); }
+  if (!response.ok || value.error) {
+    const error = new Error(value.error || value.message || 'HTTP '+response.status);
+    error.http = true;
+    throw error;
+  }
+  return value;
+}
+
+function updateButton() {
+  $('install-update').disabled = !(selectedRelease && releaseInstallable &&
+    lanEnabled && !updateBusy && !updateSubmitting && !updateUncertain);
+}
+
 async function checkUpdate() {
   const target = $('update');
   target.textContent = 'GitHub Releasesを確認中…';
+  selectedRelease = null; releaseInstallable = false;
+  updateButton();
   try {
-    const response = await fetch('/api/update', {cache:'no-store'});
-    if (!response.ok) throw Error('HTTP '+response.status);
-    const result = await response.json();
-    if (result.error) throw Error(result.message);
-    selectedRelease=result.tag;
+    const result = await updateJson('/api/update');
+    selectedRelease = result.tag;
+    releaseInstallable = Boolean(result.install_supported);
     target.replaceChildren();
     const info = document.createElement('span');
-    info.textContent = '最新リリース: ' + result.tag + ' · QPKG: ' +
-      (result.qpkg.length ? result.qpkg.map(a => a.name).join(', ') : '未公開') +
-      ' · インストール可否は下記の更新状態で確認';
+    info.textContent = result.tag
+      ? '最新リリース: ' + result.tag + ' · QPKG: ' +
+        ((result.qpkg || []).map(a => a.name).join(', ') || '未公開') +
+        (releaseInstallable ? '' : '（更新用ファイル不足）')
+      : '公開済みの更新候補がありません';
     target.append(info, document.createTextNode(' '));
     if (result.release_url && result.release_url.startsWith('https://github.com/souten-yd/QnapControlCenter/releases/')) {
       const link = document.createElement('a');
@@ -51,49 +82,101 @@ async function checkUpdate() {
       target.append(link);
     }
   } catch (error) { target.textContent = '更新確認に失敗: ' + error.message; }
+  updateButton();
 }
 $('check-update').addEventListener('click', checkUpdate);
-checkUpdate();
 
-let selectedRelease=null;
-let lanEnabled=false;
-async function updateStatus(){
- try{
-  const r=await fetch('/api/update-status',{cache:'no-store'});
-  if(!r.ok)return;
-  const v=await r.json();
-  $('update-progress').textContent='更新状況: '+v.state+(v.message?' — '+v.message:'');
-  lanEnabled=Boolean(v.lan_available);
-  $('install-update').disabled=!(v.available && lanEnabled);
-  $('lan-update-explanation').textContent = lanEnabled
-    ? 'LAN更新が利用できます。管理トークン・IP許可設定は不要です。'
-    : 'LAN内のIPアドレスでNASにアクセスしてください（公開ネットワークからの更新は不可）。';
-  if(!v.available){$('update-progress').textContent='Web更新は利用できません: QTSインストーラー（qpkg_cli）を確認してください';}
- }catch(e){$('update-progress').textContent='更新状況の取得失敗';}
+async function updateStatus() {
+  try {
+    const v = await updateJson('/api/update-status');
+    updateBusy = Boolean(v.busy);
+    updateUncertain = false;
+    const phases = {idle:'待機中',queued:'受付済み',checking:'確認中',
+      downloading:'ダウンロード・検証中',stopping:'旧サービス停止中',
+      installing:'QPKGインストール中',verifying:'起動・バージョン検証中',
+      success:'更新完了',error:'更新失敗'};
+    $('update-progress').textContent = '更新状況: ' +
+      (phases[v.state] || v.state || '不明') + (v.message ? ' — ' + v.message : '');
+    lanEnabled = Boolean(v.lan_available);
+    $('lan-update-explanation').textContent = !lanEnabled
+      ? 'LAN内のNAS IPアドレスでアクセスしてください（公開接続は不可）。'
+      : v.available
+        ? 'LAN更新が利用できます。管理トークンは不要です。'
+        : 'Web更新は利用できません: ' + (v.unsupported_reason || 'QTSの更新環境を確認してください');
+    if (!v.available) lanEnabled = false;
+    updateButton();
+  } catch (error) {
+    updateUncertain = true;
+    updateButton();
+    $('update-progress').textContent = '更新状態を取得できません。受付済みの可能性があるため自動で再実行しません: ' + error.message;
+  }
 }
-$('install-update').addEventListener('click',async()=>{
- const tag=selectedRelease;
- if(!tag){$('update-progress').textContent='先に最新版を確認してください';return;}
- if(!confirm(tag+' のQPKGをこのNASにインストールします。処理中は一時的に接続できなくなります。続行しますか？'))return;
- if(!lanEnabled){$('update-progress').textContent='LANのNAS IPアドレスからアクセスしてください';return;}
- $('update-progress').textContent='更新を開始しています…';
- try{
-  const headers={'Content-Type':'application/json'};
-  let args={tag};
-  headers['X-QCC-Update-Intent']='1';
-  const prepared=await fetch('/api/prepare-update',{
-    method:'POST',headers,body:JSON.stringify({tag})
-  });
-  const p=await prepared.json();
-  if(!prepared.ok)throw new Error(p.error||'更新準備エラー: '+prepared.status);
-  args={tag,nonce:p.nonce};
-  const r=await fetch('/api/install-update',{method:'POST',headers,body:JSON.stringify(args)});
-  const v=await r.json();
-  $('update-progress').textContent=r.ok?'更新を開始しました。再起動後に再接続してください。':'更新開始エラー: '+(v.error||r.status);
- }catch(e){$('update-progress').textContent='更新通信に失敗: '+e.message;}
+
+$('install-update').addEventListener('click', async () => {
+  const tag = selectedRelease;
+  if (!tag || !releaseInstallable || !lanEnabled || updateBusy || updateSubmitting || updateUncertain) return;
+  if (!confirm(tag + ' の公式QPKGで更新します。Web接続が一時的に切れます。続行しますか？')) return;
+  updateSubmitting = true; updateButton();
+  $('update-progress').textContent = '更新を受け付けています…';
+  try {
+    const prepared = await updateJson('/api/prepare-update', {tag});
+    await updateJson('/api/install-update', {tag, nonce: prepared.nonce});
+    $('update-progress').textContent = '更新ワーカーに受付されました。自動で進捗を確認します。';
+  } catch (error) {
+    updateUncertain = !error.http;
+    $('update-progress').textContent = error.http
+      ? '更新開始に失敗: ' + error.message
+      : '更新中に接続が切れました。重複実行せず更新状態を確認します。';
+  } finally {
+    updateSubmitting = false; updateButton();
+    // Do not assume a successful version merely because the install call returned.
+    setTimeout(updateStatus, 500);
+  }
 });
-setInterval(updateStatus,5000);
+
+async function refreshUpdateLog() {
+  try {
+    const value = await updateJson('/api/update-log');
+    $('update-log').textContent = value.log || '更新ログはまだありません';
+  } catch(error) {
+    $('update-log').textContent = '更新ログの取得に失敗: ' + error.message;
+  }
+}
+$('refresh-update-log').addEventListener('click', refreshUpdateLog);
+$('update-log-panel').addEventListener('toggle', () => {
+  if ($('update-log-panel').open) void refreshUpdateLog();
+});
+checkUpdate();
 updateStatus();
+setInterval(() => {
+  void updateStatus();
+  if ($('update-log-panel').open) void refreshUpdateLog();
+}, 5000);
+
+// Reset only the server-side RAM window; monitoring stays active and keeps its
+// existing /proc sampling baseline. Requires the same private-LAN origin policy.
+$('reset-write-log').addEventListener('click', async () => {
+  if (!confirm('5分間の書き込み診断履歴を消去して、今から計測し直しますか？')) return;
+  const button = $('reset-write-log');
+  const status = $('reset-write-state');
+  button.disabled = true;
+  status.textContent = 'RAM診断履歴をリセット中…';
+  try {
+    const response = await fetch('/api/write-log/reset', {
+      method:'POST', cache:'no-store',
+      headers:{'Content-Type':'application/json','X-QCC-Write-Intent':'1'},
+      body:'{}'
+    });
+    const data = await response.json();
+    if (!response.ok || !data.reset) throw Error(data.error || 'HTTP ' + response.status);
+    status.textContent = 'リセットしました。次の5秒計測から再集計します。';
+    await refreshWriteLog();
+  } catch (error) {
+    status.textContent = 'リセットに失敗: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 // Generate an AI-ready text file entirely in the browser on explicit click.
 $('download-write-report').addEventListener('click', async () => {
