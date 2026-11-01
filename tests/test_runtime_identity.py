@@ -20,8 +20,8 @@ class RuntimeIdentityTests(unittest.TestCase):
     def test_version_matches_manifest(self):
         info = build_info(ROOT / "packaging/qpkg.cfg",
                           "a" * 40)
-        self.assertEqual(info["version"], "0.1.16")
-        self.assertEqual(info["build_id"], "0.1.16+aaaaaaaaaaaa")
+        self.assertEqual(info["version"], "0.1.17")
+        self.assertEqual(info["build_id"], "0.1.17+aaaaaaaaaaaa")
         self.assertIn("write_diagnostics", info["features"])
         self.assertEqual(build_info(ROOT / "packaging/qpkg.cfg")["commit"], "local")
 
@@ -64,6 +64,9 @@ class RuntimeIdentityTests(unittest.TestCase):
         self.assertIn('id="running-version"', html)
         self.assertIn('id="open-write-log"', html)
         self.assertIn('id="download-write-report"', html)
+        self.assertIn('id="reset-write-log"', html)
+        self.assertIn('/api/write-log/reset', js)
+        self.assertIn('/api/write-log/reset', (ROOT / "disk_inspector/server.py").read_text())
         self.assertIn('src="/write_report.js"', html)
         self.assertIn('QCCWriteReport.format', js)
         self.assertIn('id="diag-state"', html)
