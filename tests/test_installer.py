@@ -105,9 +105,8 @@ class InstallerTests(unittest.TestCase):
         import io
         from unittest.mock import Mock
         opener = Mock()
-        opener.open.return_value.__enter__ = Mock(return_value=io.BytesIO(
-            json.dumps({"running_version": "0.1.17", "pid": 543}).encode()))
-        opener.open.return_value.__exit__ = Mock(return_value=False)
+        opener.open.return_value = io.BytesIO(json.dumps(
+            {"running_version": "0.1.17", "pid": 543}).encode())
         def cfg(name):
             return "0.1.17" if name == "Version" else "TRUE"
         with patch("disk_inspector.installer.getcfg", side_effect=cfg), \
