@@ -306,6 +306,166 @@ async function refreshWriteLog() {
 refreshWriteLog();
 setInterval(refreshWriteLog, 15000);
 
+
+// Separate 300-second READ dashboard. No extra process scan; GET the RAM cache.
+function readEmptyRow(body, cols, message) {
+  if (body.childNodes.length) return;
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = cols;
+  td.textContent = message;
+  tr.append(td);
+  body.append(tr);
+}
+async function refreshReadLog() {
+  try {
+    const response = await fetch('/api/read-log', {cache:'no-store'});
+    if (!response.ok) throw Error('HTTP ' + response.status);
+    const data = await response.json();
+    $('read-disk').textContent = bytesLabel(data.disk_read_bytes);
+    $('read-ops').textContent = Number(data.disk_read_ops || 0).toLocaleString('ja-JP') + ' 回';
+    $('read-process').textContent = bytesLabel(data.process_read_bytes);
+    $('read-self').textContent = bytesLabel(data.monitor_read_bytes);
+    $('read-meta').textContent = 'RAMに保持: ' + data.sample_count + '回 / 直近' +
+      data.window_seconds + '秒 · ' + shortTime(data.window_start) + ' ～ ' +
+      shortTime(data.window_end) + ' · ディスク記録なし';
+
+    const disks = $('read-disks');
+    disks.replaceChildren();
+    for (const d of data.physical_disks || []) {
+      const tr = document.createElement('tr');
+      for (const cellText of [d.device, bytesLabel(d.read_bytes),
+        Number(d.read_ops || 0).toLocaleString('ja-JP')]) {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        tr.append(td);
+      }
+      disks.append(tr);
+    }
+    readEmptyRow(disks, 3, '物理ディスク読み込みの取得待ち');
+
+    const body = $('read-procs');
+    body.replaceChildren();
+    for (const p of data.top_processes || []) {
+      const tr = document.createElement('tr');
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'プロセス情報を表示';
+      const pre = document.createElement('pre');
+      pre.textContent = [
+        p.executable ? '実行ファイル: ' + p.executable : '',
+        p.cwd ? '作業ディレクトリ: ' + p.cwd : '',
+        p.candidate_observed_at ? '観測: ' + shortTime(p.candidate_observed_at) : ''
+      ].filter(Boolean).join('\n') || '実行場所は特定できませんでした';
+      details.append(summary, pre);
+      for (const label of [p.name + ' (PID ' + p.pid + ')',
+        p.package_hint || '未特定', bytesLabel(p.read_bytes)]) {
+        const td = document.createElement('td');
+        td.textContent = label;
+        tr.append(td);
+      }
+      const td = document.createElement('td');
+      td.append(details);
+      tr.append(td);
+      body.append(tr);
+    }
+    readEmptyRow(body, 4, '読み込みプロセスの検出待ち、または権限不足');
+    const timeline = $('read-timeline');
+    timeline.replaceChildren();
+    const series = data.timeline || [];
+    const max = Math.max(1, ...series.map(row => row.disk_read_bytes || 0));
+    for (const point of series) {
+      const item = document.createElement('div');
+      item.className = 'write-interval';
+      const when = document.createElement('span');
+      when.textContent = shortTime(point.timestamp);
+      const track = document.createElement('div');
+      track.className = 'write-track';
+      const bar = document.createElement('div');
+      bar.className = 'write-bar read-bar';
+      bar.style.width = (100 * Number(point.disk_read_bytes || 0) / max).toFixed(1) + '%';
+      track.append(bar);
+      const amount = document.createElement('span');
+      amount.textContent = bytesLabel(point.disk_read_bytes) +
+        ' / ' + Number(point.disk_read_ops || 0) + '回';
+      item.append(when, track, amount);
+      timeline.append(item);
+    }
+    $('read-note').textContent = data.limitations + ' · ' +
+      'プロセスの読み込み量上位32件外: ' + bytesLabel(data.other_process_bytes) +
+      ' · read_opsはシーク回数ではありません。';
+  } catch (error) {
+    $('read-meta').textContent = '読み込み診断に接続できません: ' + error.message;
+  }
+}
+refreshReadLog();
+setInterval(refreshReadLog, 15000);
+
+$('reset-read-log').addEventListener('click', async () => {
+  if (!confirm('読み込み診断のRAM履歴だけを消去して、新たに5分間計測しますか？書き込み履歴は残ります。')) return;
+  const button = $('reset-read-log');
+  const status = $('reset-read-state');
+  button.disabled = true;
+  status.textContent = 'RAM読み込み履歴をリセット中…';
+  try {
+    const response = await fetch('/api/read-log/reset', {
+      method:'POST',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-QCC-Read-Intent':'1'},
+      body:'{}'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.reset) throw Error(result.error || 'HTTP ' + response.status);
+    status.textContent = '読み込み履歴をリセットしました。次の5秒計測から集計します。';
+    await refreshReadLog();
+  } catch (error) {
+    status.textContent = 'リセット失敗: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('download-read-report').addEventListener('click', async () => {
+  const button = $('download-read-report'), status = $('read-report-status');
+  button.disabled = true;
+  status.textContent = '最新のRAM読み込み診断を取得中…';
+  try {
+    const response = await fetch('/api/read-log', {cache:'no-store'});
+    if (!response.ok) throw Error('読込診断API HTTP ' + response.status);
+    const data = await response.json();
+    if (!Number(data.sample_count))
+      throw Error('正常な読み込み計測がありません。数秒後に再試行してください');
+    let runtime = null;
+    try {
+      const identity = await fetch('/api/runtime', {cache:'no-store'});
+      if (identity.ok) runtime = await identity.json();
+    } catch (_) { /* Export remains available without runtime metadata. */ }
+    const now = new Date();
+    const output = window.QCCReadReport.format(data, runtime, now);
+    const blob = new Blob(['\uFEFF', output], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = window.QCCReadReport.fileName(now);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      status.textContent = '読み込み診断レポートをダウンロードしました。パス等を確認して共有してください。';
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+  } catch(error) {
+    status.textContent = '読み込み診断の出力失敗: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('open-read-log').addEventListener('click', () => {
+  $('read-log').scrollIntoView({behavior:'smooth',block:'start'});
+  refreshReadLog();
+});
+
 async function showRunningVersion() {
   try {
     const response = await fetch('/api/runtime', {cache:'no-store'});
@@ -316,8 +476,8 @@ async function showRunningVersion() {
     const suffix = commit === 'local' ? 'local' : commit.slice(0, 12);
     $('running-version').textContent = '稼働版 ' + version + ' (' + suffix + ')';
     $('current-version').textContent = version + ' / build ' + (info.build_id || '不明');
-    $('diag-state').textContent = info.features && info.features.write_diagnostics
-      ? '常時計測中 / RAM保存300秒 / 稼働版 ' + version
+    $('diag-state').textContent = info.features && info.features.write_diagnostics && info.features.read_diagnostics
+      ? '読み書き常時計測中 / RAM保存300秒 / 稼働版 ' + version
       : 'この稼働サーバーに診断機能なし / QTS App Centerから再起動してください';
     if (!info.features || !info.features.write_diagnostics) {
       $('log-meta').textContent = 'この稼働サーバーには書込診断がありません。QTS App Centerで再起動・更新してください。';
