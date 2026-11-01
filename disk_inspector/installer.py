@@ -194,6 +194,10 @@ def status():
         fd = _lock()
     except RuntimeError:
         busy = True
+    except OSError:
+        # Unprivileged development/diagnostic clients cannot create /var/run
+        # locks. Status should remain readable and must not assume success.
+        busy = current.get("state") in ACTIVE
     else:
         busy = False
         os.close(fd)
