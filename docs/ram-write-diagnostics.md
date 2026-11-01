@@ -60,3 +60,16 @@ The format tests run with Node.js during CI and inspect output with Unicode path
 The **5分間の診断をリセット** button clears the in-memory rolling sample deque, file-descriptor candidate paths and FD probe timestamp. It does NOT reset kernel /proc counters, interrupt the existing 5-second sampler, delete a NAS file, or restart services. A confirmation prompt is required. The next normal sample starts the new diagnostic window, and export correctly refuses an empty window until a valid sample arrives.
 
 POST /api/write-log/reset accepts exactly an empty JSON object with private-LAN same-origin protection and X-QCC-Write-Intent. The operation holds the existing State lock, so a concurrent collector cannot interleave its sample with clearing the window. The UI reports success/failure; no on-disk audit file is created. The HTTP server still does not log routine requests to disk.
+
+## Separate RAM-only READ diagnostics (v0.1.18-rc20)
+
+HDD head seeking and audible clicks may be triggered by read operations as well as writes, particularly frequent random reads. The new **読込診断** panel independently shows physical reads, kernel-reported block-device read operations, per-process /proc/PID/io read_bytes totals, top readers, read operations and read byte time series, and bounded process executable/cwd/QPKG hints. Physical read operations are **not** head seek counts. Linux page cache can satisfy application reads without physical disk activity, while readahead and kernel I/O can generate physical disk reads without an exact matching process.
+
+Both 300-second windows reuse the **single existing 5-second diskstats/procfs sampler**. The new read collector does not execute a second process scan or enumerate readable file descriptors, and no new disk log/database/trace/scheduler is created. Every 30 seconds, for at most six top readers, the collector optionally examines only virtual /proc process stat, exe and cwd hints; those are NOT actual file read destinations. PID starttime is checked to avoid misattributing PID reuse. Read and write process totals must not be added to the physical block totals. RAID member totals may count one logical I/O more than once. All read samples are bounded by existing 300-second and 305-entry constraints.
+
+- **GET /api/read-log** returns read-only RAM snapshot, independent of existing GET /api/write-log.
+- **POST /api/read-log/reset** accepts only '{}' with the same private-LAN numeric Host/Origin and X-QCC-Read-Intent: 1 constraints. It clears only read history and associated hints under the collector lock; write history remains.
+- The **読み込みAI解析用テキストをDL** button builds a UTF-8 BOM report in the browser from GET /api/read-log with full original JSON and clear read/cache/RAID/seek limitations. The NAS never stores the downloaded report. Check the content for identifying paths before sharing.
+- The existing write diagnostic's reset, export, API, sampled values and storage behavior remain unchanged.
+
+The QPKG artifact validator verifies the new source/HTML/JS/API/version feature metadata and the released build contains both new read modules. The real HDD sound correlation, and whether QTS procfs permissions expose enough per-process read_bytes, must be checked on the NAS hardware.
